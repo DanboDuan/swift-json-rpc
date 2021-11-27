@@ -17,32 +17,12 @@ import Foundation
 import NIO
 import NIOCore
 
-public enum ConnectionType: Equatable {
-    case Server
-    case Client
-}
-
-public enum ConnectionState: Equatable {
+public enum State: Equatable {
     case initializing
     case starting(String)
     case started
     case stopping
     case stopped
-}
-
-public struct State: Equatable {
-    public var state: ConnectionState
-    public var type: ConnectionType?
-
-    public init(state: ConnectionState, type: ConnectionType? = nil) {
-        self.state = state
-        self.type = type
-    }
-}
-
-struct OutstandingRequestType {
-    public var requestType: _RequestType.Type
-    public var responseType: ResponseType.Type
 }
 
 struct RequestCancelKey: Hashable {
@@ -55,16 +35,16 @@ struct RequestCancelKey: Hashable {
 }
 
 public final class JSONRPC {
-    public let group: EventLoopGroup
-    private let config: Config
-    private var channel: Channel?
-    private let messageRegistry: MessageRegistry
-    private var type: ConnectionType?
+    let group: EventLoopGroup
+    let config: Config
+    let messageRegistry: MessageRegistry
 
-    private var requestHandlers: [ObjectIdentifier: Any] = [:]
-    private var notificationHandlers: [ObjectIdentifier: Any] = [:]
-    private var requestCancellation: [RequestCancelKey: CancellationToken] = [:]
-    private var outstandingRequests: [RequestID: OutstandingRequestType] = [:]
+    var requestHandlers: [ObjectIdentifier: Any] = [:]
+    var notificationHandlers: [ObjectIdentifier: Any] = [:]
+
+    var requestCancellation: [RequestCancelKey: CancellationToken] = [:]
+    var handler: JSONRPCMessageHandler?
+    var channel: Channel?
 
     public init(messageRegistry: MessageRegistry,
                 config: Config = Config())
@@ -72,22 +52,18 @@ public final class JSONRPC {
         self.messageRegistry = messageRegistry
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: config.numberOfThreads)
         self.config = config
-        self.state = State(state: .initializing)
+        self.state = .initializing
+        JSONRPCLogger.shared.enable = config.log
     }
 
     deinit {
-        assert(self.state.state == .stopped)
+        assert(self.state == .stopped)
     }
 
     public func startClient(host: String, port: Int) -> EventLoopFuture<JSONRPC> {
-        assert(self.state.state == .initializing)
-        let callbackRegistry = { id in
-            guard let outstanding = self.outstandingRequests[id] else {
-                return nil
-            }
-            return outstanding.responseType
-        } as JSONRPCMessage.ResponseTypeCallback
-        let handler = JSONRPCMessageHandler(self)
+        assert(self.state == .initializing)
+
+        let handler = JSONRPCMessageHandler(self, type: .Client)
         let bootstrap = ClientBootstrap(group: self.group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelInitializer { channel in
@@ -98,32 +74,26 @@ public final class JSONRPC {
                                                              MessageToByteHandler(framingHandler)])
                     }.flatMap {
                         channel.pipeline.addHandlers([
-                            CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry, callbackRegistry: callbackRegistry),
+                            CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry, callbackRegistry: handler),
                             handler,
                         ])
                     }
             }
 
-        self.state = State(state: .starting("\(host):\(port)"), type: .Server)
+        self.state = .starting("\(host):\(port)")
+
         return bootstrap.connect(host: host, port: port).flatMap { channel in
             self.channel = channel
             ///
-            self.state = State(state: .started, type: .Server)
+            self.state = .started
             return channel.eventLoop.makeSucceededFuture(self)
         }
     }
 
-    public func startServer(host: String, port: Int) -> EventLoopFuture<(ServerConnection, Channel)> {
-        self.type = .Server
-        assert(self.state.state == .initializing)
-        let handler = JSONRPCMessageHandler(self)
-        let callbackRegistry = { id in
-            guard let outstanding = self.outstandingRequests[id] else {
-                return nil
-            }
-            return outstanding.responseType
-        } as JSONRPCMessage.ResponseTypeCallback
-
+    public func startServer(host: String, port: Int) -> EventLoopFuture<JSONRPC> {
+        assert(self.state == .initializing)
+        let handler = JSONRPCMessageHandler(self, type: .Server)
+        self.handler = handler
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
@@ -134,44 +104,50 @@ public final class JSONRPC {
                         return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
                                                              MessageToByteHandler(framingHandler)])
                     }.flatMap {
-                        channel.pipeline.addHandlers([CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry, callbackRegistry: callbackRegistry),
+                        channel.pipeline.addHandlers([CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry),
                                                       handler])
                     }
             }
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
             .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-        self.state = State(state: .starting("\(host):\(port)"), type: .Client)
+        self.state = .starting("\(host):\(port)")
+
         return bootstrap.bind(host: host, port: port).flatMap { channel in
             self.channel = channel
-            self.state = State(state: .started, type: .Client)
-            return channel.eventLoop.makeSucceededFuture((handler, channel))
+            self.state = .started
+            return channel.eventLoop.makeSucceededFuture(self)
         }
     }
 
-    func _stop() -> EventLoopFuture<Void> {
+    public func stop() {
         let state = self.state
-        if state.state != .started {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+        if state != .started {
+            return
         }
         guard let channel = self.channel else {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+            return
         }
-        self.state = State(state: .stopping, type: state.type)
+        self.state = .stopping
         channel.closeFuture.whenComplete { _ in
-            self.state = State(state: .stopped, type: state.type)
+            self.state = .stopped
         }
-        return channel.close()
+
+        return channel.close().whenComplete { _ in
+            do {
+                try self.group.syncShutdownGracefully()
+            } catch {
+                exit(0)
+            }
+        }
     }
 
-    public func stop(callback: @escaping (Error?) -> Void) {
-        self._stop().whenComplete { _ in
-            self.group.shutdownGracefully(callback)
-        }
+    public var closeFuture: EventLoopFuture<Void> {
+        return self.channel!.closeFuture
     }
 
-    private var _state = State(state: .initializing)
+    private var _state = State.initializing
     private let lock = NSLock()
-    private var state: State {
+    public var state: State {
         get {
             return self.lock.withLock {
                 _state
@@ -182,74 +158,6 @@ public final class JSONRPC {
                 _state = newValue
                 log("\(self) \(_state)")
             }
-        }
-    }
-}
-
-public extension JSONRPC {
-    internal func readyToSend(shouldLog: Bool = true) -> Bool {
-//        precondition(self.state == .connected, "tried to send message before start")
-//        if self.state != .connected {
-//            return false
-//        }
-
-        guard self.channel != nil else {
-            return false
-        }
-
-        return true
-    }
-
-    func record<Request>(_ request: Request) -> RequestID where Request: RequestType {
-        let id = RequestID.string(UUID().uuidString)
-        self.outstandingRequests[id] = OutstandingRequestType(
-            requestType: Request.self,
-            responseType: Request.Response.self)
-        return id
-    }
-
-    @discardableResult
-    func send(message: JSONRPCMessage) -> EventLoopFuture<JSONRPCMessage> {
-        let promise: EventLoopPromise<JSONRPCMessage> = self.channel!.eventLoop.makePromise()
-        let future = self.channel!.eventLoop.submit {
-            let wrapper = JSONRPCMessageWrapper(message: message, promise: promise)
-            let wait = self.channel!.writeAndFlush(wrapper)
-            wait.cascadeFailure(to: promise)
-        }
-        return future.flatMap {
-            promise.futureResult
-        }
-    }
-
-    @discardableResult
-    func send<Request>(_ request: Request) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType {
-        guard self.readyToSend() else {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
-        }
-
-        let id = self.record(request)
-        return self.send(message: JSONRPCMessage.request(request, id: id)).map { anyResult in
-            switch anyResult {
-            case .response(let response, id: _):
-                return .success(response as! Request.Response)
-            case .errorResponse(let error, id: _):
-                return .failure(error)
-            default:
-                return .failure(ResponseError.unknown("unknown result"))
-            }
-        }
-    }
-
-    func send<Notification>(_ notification: Notification) where Notification: NotificationType {
-        self.send(message: JSONRPCMessage.notification(notification))
-    }
-
-    func sendReply(_ response: JSONRPCResult<ResponseType>, id: RequestID) {
-        switch response {
-        case .success(let result):
-            self.send(message: JSONRPCMessage.response(result, id: id))
-        case .failure(let error):
-            self.send(message: JSONRPCMessage.errorResponse(error, id: id))
         }
     }
 }
@@ -332,4 +240,3 @@ extension JSONRPC: MessageHandler {
         handler(request)
     }
 }
-

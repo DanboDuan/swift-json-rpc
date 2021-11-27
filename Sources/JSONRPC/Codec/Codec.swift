@@ -20,7 +20,7 @@ internal let maxPayload = 1_000_000 // 1MB
 
 // bytes to codable and back
 // <Response, Request>
-public final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler where In: Decodable, Out: Encodable {
+final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler where In: Decodable, Out: Encodable {
     public typealias InboundIn = ByteBuffer
     public typealias InboundOut = In
     public typealias OutboundIn = Out
@@ -30,7 +30,7 @@ public final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutbound
     private let encoder = JSONEncoder()
 
     public init(messageRegistry: MessageRegistry? = nil,
-                callbackRegistry: JSONRPCMessage.ResponseTypeCallback? = nil)
+                callbackRegistry: ResponseTypeCallback? = nil)
     {
         self.encoder.outputFormatting = .withoutEscapingSlashes
         self.decoder.userInfo[.messageRegistryKey] = messageRegistry

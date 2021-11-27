@@ -22,18 +22,18 @@ public enum JSONRPCMessage {
     case errorResponse(ResponseError, id: RequestID?)
 }
 
-struct JSONRPCMessageWrapper {
-    let message: JSONRPCMessage
-    let promise: EventLoopPromise<JSONRPCMessage>?
-}
+
 
 public extension CodingUserInfoKey {
     static let responseTypeCallbackKey = CodingUserInfoKey(rawValue: "jsonrpc.responseTypeCallback")!
     static let messageRegistryKey = CodingUserInfoKey(rawValue: "jsonrpc.messageRegistry")!
 }
 
+protocol ResponseTypeCallback {
+    func responseType(for id: RequestID) -> ResponseType.Type?
+}
+
 extension JSONRPCMessage: Codable {
-    public typealias ResponseTypeCallback = (RequestID) -> ResponseType.Type?
 
     private enum CodingKeys: String, CodingKey {
         case jsonrpc
@@ -93,7 +93,7 @@ extension JSONRPCMessage: Codable {
                     fatalError("missing or invalid responseTypeCallbackKey on decoder")
                 }
 
-                guard let responseType = responseTypeCallback(id) else {
+                guard let responseType = responseTypeCallback.responseType(for: id) else {
                     throw MessageDecodingError.invalidParams("response to unknown request \(id)")
                 }
 

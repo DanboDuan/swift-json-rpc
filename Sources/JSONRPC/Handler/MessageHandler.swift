@@ -12,20 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Foundation
 import NIO
+
+struct JSONRPCMessageWrapper {
+    let message: JSONRPCMessage
+    let promise: EventLoopPromise<JSONRPCMessage>?
+}
+
+struct OutstandingRequestType {
+    public var requestType: _RequestType.Type
+    public var responseType: ResponseType.Type
+}
+
+enum ConnectionType: Equatable {
+    case Server
+    case Client
+}
 
 final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler {
     public typealias InboundIn = JSONRPCMessage
     public typealias OutboundIn = JSONRPCMessageWrapper
     public typealias OutboundOut = JSONRPCMessage
 
-    private let receiveHandler: MessageHandler
+    private unowned let receiveHandler: MessageHandler
     private var channelConnections: [ObjectIdentifier: Channel] = [:]
+    private var outstandingRequests: [RequestID: OutstandingRequestType] = [:]
 
     private var queue = [RequestID: EventLoopPromise<JSONRPCMessage>]()
     private let type: ConnectionType
 
-    public init(_ handler: MessageHandler, type: ConnectionType = .Server) {
+    public init(_ handler: MessageHandler, type: ConnectionType) {
         self.receiveHandler = handler
         self.type = type
     }
@@ -35,9 +52,13 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     /// server send notification
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         let wrapper = self.unwrapOutboundIn(data)
-        if case .request(_, let id) = wrapper.message {
+        if case .request(let request, let id) = wrapper.message {
+            self.outstandingRequests[id] = OutstandingRequestType(
+                requestType: Swift.type(of: request),
+                responseType: request.responseType())
             self.queue[id] = wrapper.promise
         }
+
         context.write(wrapOutboundOut(wrapper.message), promise: promise)
     }
 
@@ -130,22 +151,34 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     }
 }
 
-extension JSONRPCMessageHandler: ServerConnection {
-    func send<Notification>(_ notification: Notification, clients: [ObjectIdentifier]?) where Notification: NotificationType {
-        guard let clients = clients else {
-            self.channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
-                try? channel.eventLoop.submit {
-                    channel.writeAndFlush(self.wrapOutboundOut(JSONRPCMessage.notification(notification)), promise: nil)
-                }.wait()
+extension JSONRPCMessageHandler: RPCServer {
+    public func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType {
+        let message = JSONRPCMessage.notification(notification)
+        let wrapper = JSONRPCMessageWrapper(message: message, promise: nil)
+        switch client {
+        case .some(id: let id):
+            guard let channel = self.channelConnections[id] else {
+                return
             }
+            channel.eventLoop.execute {
+                channel.writeAndFlush(NIOAny(wrapper), promise: nil)
+            }
+        case .all:
+            self.channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
+                channel.eventLoop.execute {
+                    channel.writeAndFlush(NIOAny(wrapper), promise: nil)
+                }
+            }
+        }
+    }
+}
 
-            return
+extension JSONRPCMessageHandler: ResponseTypeCallback {
+    public func responseType(for id: RequestID) -> ResponseType.Type? {
+        guard let outstanding = self.outstandingRequests[id] else {
+            return nil
         }
 
-        clients.compactMap { self.channelConnections[$0] }.forEach { channel in
-            try? channel.eventLoop.submit {
-                channel.writeAndFlush(self.wrapOutboundOut(JSONRPCMessage.notification(notification)), promise: nil)
-            }.wait()
-        }
+        return outstanding.responseType
     }
 }

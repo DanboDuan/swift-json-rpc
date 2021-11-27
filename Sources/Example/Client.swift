@@ -55,12 +55,10 @@ final class Client: ParsableCommand {
             _ = try! client.startClient(host: address.0, port: address.1).wait()
             sendRequest(client: client)
             sendNotification(client: client)
-            let group = DispatchGroup()
-            group.enter()
-            group.wait()
-//            client.stop(callback: { _ in
-//                _exit(0)
-//            })
+//            let group = DispatchGroup()
+//            group.enter()
+//            group.wait()
+            client.stop()
         }
     }
 }

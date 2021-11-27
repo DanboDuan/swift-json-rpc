@@ -10,32 +10,35 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Dispatch
+import NIO
+
+public enum ClientType {
+    case all
+    case some(id: ObjectIdentifier)
+}
 
 /// An abstract client connection handler, allow server to send messages to a client
-public protocol ServerConnection: AnyObject {
+public protocol RPCServer: AnyObject {
     /// Send a notification to clients
     /// if nil clients, send it to all clients
-    func send<Notification>(_ notification: Notification, clients: [ObjectIdentifier]?) where Notification: NotificationType
+    func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType
 }
 
 /// An abstract connection, allow messages to be sent to a (potentially remote) `MessageHandler`.
-public protocol ClientConnection: AnyObject {
+public protocol RPCClient: AnyObject {
     /// Send a notification without a reply.
     func send<Notification>(_ notification: Notification) where Notification: NotificationType
-
+    
     /// Send a request and (asynchronously) receive a reply.
-    func send<Request>(_ request: Request, reply: @escaping (JSONRPCResult<Request.Response>) -> Void) -> RequestID where Request: RequestType
+    func send<Request>(_ request: Request) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType
 }
 
-
-
 /// An abstract message handler, such as a language server or client.
-public protocol MessageHandler: AnyObject {
+protocol MessageHandler: AnyObject {
     /// Handle a notification without a reply.
     func handle<Notification>(_: Notification, from: ObjectIdentifier) where Notification: NotificationType
 
     /// Handle a request and (asynchronously) receive a reply.
-    /// EventLoopFuture<JSONRPCResult<Request.Response>> 
+    /// EventLoopFuture<JSONRPCResult<Request.Response>>
     func handle<Request>(_: Request, id: RequestID, from: ObjectIdentifier, reply: @escaping (JSONRPCResult<Request.Response>) -> Void) where Request: RequestType
 }

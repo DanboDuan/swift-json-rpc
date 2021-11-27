@@ -14,7 +14,7 @@
 
 import Logging
 
-public func log(
+func log(
     _ message: @autoclosure () -> Logger.Message,
     level: LogLevel = .default,
     file: String = #file,
@@ -24,10 +24,11 @@ public func log(
     JSONRPCLogger.shared.log(message(), level: level, file: file, function: function, line: line)
 }
 
-public final class JSONRPCLogger {
+final class JSONRPCLogger {
     public internal(set) static var shared: JSONRPCLogger = .init(logger: Logger(label: "com.jsonrpc.log"))
 
     private var logger: Logger
+    public var enable = false
 
     internal subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
         get {
@@ -49,6 +50,7 @@ public final class JSONRPCLogger {
         function: String,
         line: UInt
     ) {
+        guard self.enable else { return }
         self.logger.log(
             level: level,
             message(),

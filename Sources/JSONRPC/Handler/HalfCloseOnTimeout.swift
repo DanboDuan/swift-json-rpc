@@ -14,7 +14,7 @@
 
 import NIO
 
-public final class HalfCloseOnTimeout: ChannelInboundHandler {
+final class HalfCloseOnTimeout: ChannelInboundHandler {
     public typealias InboundIn = Any
 
     public func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {

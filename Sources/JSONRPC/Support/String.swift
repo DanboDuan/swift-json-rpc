@@ -14,7 +14,7 @@
 
 import Foundation
 
-public extension String {
+extension String {
     func trimmed() -> Substring {
         guard let firstElementIndex = firstIndex(where: { !$0.isWhitespace }) else {
             return Substring("")

@@ -27,6 +27,7 @@ public protocol _RequestType: MessageType {
         reply: @escaping (JSONRPCResult<ResponseType>, RequestID) -> Void
     )
     
+    func responseType () -> ResponseType.Type
 }
 
 /// A request, which must have a unique `method` name as well as an associated response type.
@@ -57,6 +58,10 @@ public extension RequestType {
     
     func _cancelledResponse() -> JSONRPCResult<Response>? {
         return nil
+    }
+    
+    func responseType () -> ResponseType.Type {
+        return Response.self;
     }
 }
 

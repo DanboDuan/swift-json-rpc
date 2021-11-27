@@ -14,7 +14,7 @@
 
 import Foundation
 
-public extension NSLock {
+extension NSLock {
     func withLock<T>(_ body: () -> T) -> T {
         self.lock()
         defer {

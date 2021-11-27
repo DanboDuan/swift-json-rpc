@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Logging
-
-typealias LogLevel = Logger.Level
-
-extension LogLevel {
-    static let `default`: LogLevel = .info
+extension JSONRPC: RPCServer {
+    public func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType {
+        guard let handler = handler else {
+            return
+        }
+        handler.send(notification, to: client)
+    }
 }

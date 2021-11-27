@@ -35,7 +35,7 @@ final class Server: ParsableCommand {
     func hello(_ request: Request<HelloRequest>) {
         request.reply(HelloResult(greet: "hello \(request.params.name)"))
         if let server = server {
-            server.send(HiNotification(message: "hi"))
+            server.send(HiNotification(message: "hi"), to: .all)
         }
     }
 
@@ -55,10 +55,8 @@ final class Server: ParsableCommand {
             server.register(self.hello)
             server.register(self.hi)
             self.server = server
-            let group = DispatchGroup()
-            group.enter()
             _ = try! server.startServer(host: address.0, port: address.1).wait()
-            group.wait()
+            try? server.closeFuture.wait()
         }
     }
 }
