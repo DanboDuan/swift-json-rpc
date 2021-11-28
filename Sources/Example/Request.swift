@@ -35,4 +35,14 @@ public struct HelloResult: ResponseType, Hashable {
     }
 }
 
-/// InitializedBuildNotification
+public struct UnknownRequest: RequestType, Hashable {
+    public static let method: String = "unknown"
+    public typealias Response = HelloResult
+    public var name: String
+    public var data: JSONAny?
+
+    public init(name: String, data: JSONAny?) {
+        self.name = name
+        self.data = data
+    }
+}

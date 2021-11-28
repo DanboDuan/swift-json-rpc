@@ -71,7 +71,7 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
         case .notification(let notification):
             notification._handle(self.receiveHandler, from: ObjectIdentifier(context.channel))
         case .request(let request, id: let id):
-            request._handle(self.receiveHandler, id: id, from: ObjectIdentifier(context.channel)) { response, id in
+            request._handle(self.receiveHandler, id: id, from: ObjectIdentifier(context.channel)).whenSuccess { response in
                 let result: JSONRPCMessage
                 switch response {
                 case .success(let value):
@@ -106,15 +106,21 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
         case CodecError.badJSON:
             let responseError = ResponseError(code: .parseError, error: error)
             let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.channel.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
         case CodecError.requestTooLarge:
             let responseError = ResponseError(code: .invalidRequest, error: error)
             let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.channel.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
         default:
-            let responseError = ResponseError(code: .internalError, error: error)
-            let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.channel.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            if let decodingError = error as? MessageDecodingError {
+                let responseError = ResponseError(decodingError)
+                let response: JSONRPCMessage = .errorResponse(responseError, id: decodingError.id)
+                context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            } else {
+                let responseError = ResponseError(code: .internalError, error: error)
+                let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
+                context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            }
         }
     }
 
@@ -151,7 +157,7 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     }
 }
 
-extension JSONRPCMessageHandler: RPCServer {
+extension JSONRPCMessageHandler: ServerNotificationSender {
     public func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType {
         let message = JSONRPCMessage.notification(notification)
         let wrapper = JSONRPCMessageWrapper(message: message, promise: nil)

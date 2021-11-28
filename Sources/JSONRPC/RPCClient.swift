@@ -30,7 +30,7 @@ extension JSONRPC: RPCClient {
             wait.cascadeFailure(to: promise)
         }
 
-        return future.flatMap {
+        let result: EventLoopFuture<JSONRPCResult<Request.Response>> = future.flatMap {
             promise.futureResult
         }.map { anyResult in
             switch anyResult {
@@ -42,6 +42,10 @@ extension JSONRPC: RPCClient {
                 return .failure(ResponseError.unknown("unknown result"))
             }
         }
+
+//        let response = Response<Request>(requestID: id, result: result, client: self)
+
+        return result
     }
 
     public func send<Notification>(_ notification: Notification) where Notification: NotificationType {

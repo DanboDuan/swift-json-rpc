@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NIOCore
 
 public protocol MessageType: Codable {}
 
@@ -23,19 +24,18 @@ public protocol _RequestType: MessageType {
     func _handle(
         _ handler: MessageHandler,
         id: RequestID,
-        from: ObjectIdentifier,
-        reply: @escaping (JSONRPCResult<ResponseType>, RequestID) -> Void
-    )
-    
-    func responseType () -> ResponseType.Type
+        from: ObjectIdentifier
+    ) -> EventLoopFuture<JSONRPCResult<ResponseType>>
+
+    func responseType() -> ResponseType.Type
 }
 
 /// A request, which must have a unique `method` name as well as an associated response type.
 public protocol RequestType: _RequestType {
     /// The type of of the response to this request.
     associatedtype Response: ResponseType
-    
-    func _cancelledResponse() -> JSONRPCResult<Response>?
+
+    func _cancelledResponse() -> Response?
 }
 
 /// A notification, which must have a unique `method` name.
@@ -45,23 +45,24 @@ public protocol NotificationType: MessageType {
 }
 
 public extension RequestType {
+    
     func _handle(
         _ handler: MessageHandler,
         id: RequestID,
-        from: ObjectIdentifier,
-        reply: @escaping (JSONRPCResult<ResponseType>, RequestID) -> Void
-    ) {
-        handler.handle(self, id: id, from: from) { response in
-            reply(response.map { $0 as ResponseType }, id)
+        from: ObjectIdentifier
+    ) -> EventLoopFuture<JSONRPCResult<ResponseType>> {
+        let result = handler.handle(self, id: id, from: from)
+        return result.map { response in
+            response.map { $0 as ResponseType }
         }
     }
-    
-    func _cancelledResponse() -> JSONRPCResult<Response>? {
+
+    func _cancelledResponse() -> Response? {
         return nil
     }
-    
-    func responseType () -> ResponseType.Type {
-        return Response.self;
+
+    func responseType() -> ResponseType.Type {
+        return Response.self
     }
 }
 

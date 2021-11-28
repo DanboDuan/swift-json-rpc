@@ -70,7 +70,7 @@ public extension ResponseError {
 }
 
 /// An error during message decoding.
-public struct MessageDecodingError: Error, Hashable {
+public struct MessageDecodingError: Error, Hashable, Codable {
     /// The error code.
     public var code: ErrorCode
 
@@ -80,7 +80,7 @@ public struct MessageDecodingError: Error, Hashable {
     /// If it was possible to recover the request id, it is stored here. This can be used e.g. to reply with a `ResponseError` to invalid requests.
     public var id: RequestID?
 
-    public enum MessageKind {
+    public enum MessageKind: Codable {
         case request
         case response
         case notification

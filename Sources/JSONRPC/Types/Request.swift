@@ -10,6 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
+
 /// A request object, wrapping the parameters of a `RequestType` and tracking its state.
 public final class Request<R: RequestType> {
     public typealias Params = R
@@ -25,8 +27,8 @@ public final class Request<R: RequestType> {
     /// The request parameters.
     public let params: Params
 
-    private var replyBlock: (JSONRPCResult<Response>) -> Void
-
+    private var promise: EventLoopPromise<JSONRPCResult<Response>>
+    
     /// Whether a reply has been made. Every request must reply exactly once.
     private var replied: Bool = false {
         willSet {
@@ -35,19 +37,19 @@ public final class Request<R: RequestType> {
     }
 
     /// The request's cancellation state.
-    public let cancellationToken: CancellationToken
+    private let cancellationToken: CancellationToken
 
-    public init(_ request: Params, id: RequestID, clientID: ObjectIdentifier, cancellation: CancellationToken, reply: @escaping (JSONRPCResult<Response>) -> Void) {
+    public init(_ request: Params, id: RequestID, clientID: ObjectIdentifier, cancellation: CancellationToken, promise: EventLoopPromise<JSONRPCResult<Response>>) {
         self.id = id
         self.clientID = clientID
         self.params = request
         self.cancellationToken = cancellation
-        self.replyBlock = reply
+        self.promise = promise
         _ = cancellation.addCancellationHandler { [weak self] in
             if let cancelled = request._cancelledResponse() {
                 self?.reply(cancelled)
             } else {
-                self?.reply(.failure(ResponseError.cancelled))
+                self?.reply(ResponseError.cancelled)
             }
         }
     }
@@ -59,21 +61,29 @@ public final class Request<R: RequestType> {
     /// Reply to the request with `result`.
     ///
     /// This must be called exactly once for each request.
-    public func reply(_ result: JSONRPCResult<Response>) {
+    public func reply(_ result: ResponseError) {
         guard !isCancelled else {
             return
         }
         replied = true
-        replyBlock(result)
+        promise.succeed(.failure(result))
     }
 
     /// Reply to the request with `.success(result)`.
     public func reply(_ result: Response) {
-        reply(.success(result))
+        guard !isCancelled else {
+            return
+        }
+        replied = true
+        promise.succeed(.success(result))
     }
 
     /// Whether the result has been cancelled.
     public var isCancelled: Bool { return cancellationToken.isCancelled }
+    
+    public func addCancellationHandler(_ handler: @escaping () -> Void) -> Disposable {
+        return self.cancellationToken.addCancellationHandler(handler)
+    }
 }
 
 extension Request: CustomStringConvertible {

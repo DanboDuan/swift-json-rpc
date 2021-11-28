@@ -54,6 +54,7 @@ public final class JSONRPC {
         self.config = config
         self.state = .initializing
         JSONRPCLogger.shared.enable = config.log
+        self.register(JSONRPC.onCancelRequestNotification)
     }
 
     deinit {
@@ -162,13 +163,13 @@ public final class JSONRPC {
     }
 }
 
-extension JSONRPC: MessageHandler {
-    // MARK: Request registration.
+extension JSONRPC: NotificationHandlerRegistry {
+    // MARK: Handler registration.
 
     /// Register the given request handler, which must be a method on `self`.
     ///
     /// Must be called on `queue`.
-    public func register<Server, R>(_ requestHandler: @escaping (Server) -> (Request<R>) -> Void) {
+    func register<Server, R>(_ requestHandler: @escaping (Server) -> (Request<R>) -> Void) {
         // We can use `unowned` here because the handler is run synchronously on `queue`.
         precondition(self is Server)
         self.requestHandlers[ObjectIdentifier(R.self)] = { [unowned self] request in
@@ -179,64 +180,54 @@ extension JSONRPC: MessageHandler {
     /// Register the given notification handler, which must be a method on `self`.
     ///
     /// Must be called on `queue`.
-    public func register<Server, N>(_ noteHandler: @escaping (Server) -> (Notification<N>) -> Void) {
+    func register<Server, N>(_ noteHandler: @escaping (Server) -> (Notification<N>) -> Void) {
         // We can use `unowned` here because the handler is run synchronously on `queue`.
         self.notificationHandlers[ObjectIdentifier(N.self)] = { [unowned self] note in
             noteHandler(self as! Server)(note)
         }
     }
 
-    /// Register the given request handler.
-    ///
-    /// Must be called on `queue`.
-    public func register<R>(_ requestHandler: @escaping (Request<R>) -> Void) {
-        self.requestHandlers[ObjectIdentifier(R.self)] = requestHandler
-    }
-
     /// Register the given notification handler.
-    ///
-    /// Must be called on `queue`.
     public func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void) {
         self.notificationHandlers[ObjectIdentifier(N.self)] = noteHandler
     }
 
-    /// Handle an unknown request.
-    ///
-    /// By default, replies with `methodNotFound` error.
-    func handleUnknown<R>(_ request: Request<R>) {
-        request.reply(.failure(ResponseError.methodNotFound(R.method)))
+    public func onCancelRequestNotification(_ notification: Notification<CancelRequestNotification>) {
+        let key = RequestCancelKey(client: notification.clientID, request: notification.params.id)
+        self.requestCancellation[key]?.cancel()
     }
+}
 
-    /// Handle an unknown notification.
-    func handleUnknown<N>(_ notification: Notification<N>) {
-        // Do nothing.
-    }
-
+extension JSONRPC: MessageHandler {
     public func handle<N>(_ params: N, from clientID: ObjectIdentifier) where N: NotificationType {
         let notification = Notification(params, clientID: clientID)
         guard let handler = notificationHandlers[ObjectIdentifier(N.self)] as? ((Notification<N>) -> Void) else {
-            self.handleUnknown(notification)
             return
         }
         handler(notification)
     }
 
-    public func handle<R>(_ params: R, id: RequestID, from clientID: ObjectIdentifier, reply: @escaping (JSONRPCResult<R.Response>) -> Void) where R: RequestType {
+    public func handle<R>(_ params: R, id: RequestID, from clientID: ObjectIdentifier) -> EventLoopFuture<JSONRPCResult<R.Response>> where R: RequestType {
+        guard let handler = requestHandlers[ObjectIdentifier(R.self)] as? ((Request<R>) -> Void) else {
+            let error = ResponseError.methodNotFound(R.method)
+            return self.group.next().makeSucceededFuture(.failure(error))
+        }
+
+        let promise: EventLoopPromise<JSONRPCResult<R.Response>> = self.group.next().makePromise()
         let cancellationToken = CancellationToken()
         let key = RequestCancelKey(client: clientID, request: id)
 
         self.requestCancellation[key] = cancellationToken
-
-        let request = Request(params, id: id, clientID: clientID, cancellation: cancellationToken, reply: { [weak self] result in
+        let request = Request(params, id: id, clientID: clientID, cancellation: cancellationToken, promise: promise)
+        promise.futureResult.whenComplete { [weak self] _ in
             self?.requestCancellation[key] = nil
-            reply(result)
-        })
-
-        guard let handler = requestHandlers[ObjectIdentifier(R.self)] as? ((Request<R>) -> Void) else {
-            self.handleUnknown(request)
-            return
+        }
+        let future = self.group.next().submit {
+            handler(request)
         }
 
-        handler(request)
+        return future.flatMap {
+            promise.futureResult
+        }
     }
 }

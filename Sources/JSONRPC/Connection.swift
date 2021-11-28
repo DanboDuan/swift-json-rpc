@@ -10,35 +10,45 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 
 public enum ClientType {
     case all
     case some(id: ObjectIdentifier)
 }
 
-/// An abstract client connection handler, allow server to send messages to a client
-public protocol RPCServer: AnyObject {
+public protocol NotificationHandlerRegistry: AnyObject {
+    /// Register the given request handler.
+    func register<R>(_ requestHandler: @escaping (Request<R>) -> Void)
+}
+
+public protocol ServerNotificationSender: AnyObject {
     /// Send a notification to clients
     /// if nil clients, send it to all clients
     func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType
 }
 
+/// An abstract client connection handler, allow server to send messages to a client
+public protocol RPCServer: NotificationHandlerRegistry, ServerNotificationSender {
+    /// Register the given notification handler.
+    func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void)
+}
+
 /// An abstract connection, allow messages to be sent to a (potentially remote) `MessageHandler`.
-public protocol RPCClient: AnyObject {
+public protocol RPCClient: NotificationHandlerRegistry {
     /// Send a notification without a reply.
     func send<Notification>(_ notification: Notification) where Notification: NotificationType
-    
-    /// Send a request and (asynchronously) receive a reply.
+
+    /// Send a request and receive a reply.
     func send<Request>(_ request: Request) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType
 }
 
 /// An abstract message handler, such as a language server or client.
-protocol MessageHandler: AnyObject {
+public protocol MessageHandler: AnyObject {
     /// Handle a notification without a reply.
     func handle<Notification>(_: Notification, from: ObjectIdentifier) where Notification: NotificationType
 
     /// Handle a request and (asynchronously) receive a reply.
     /// EventLoopFuture<JSONRPCResult<Request.Response>>
-    func handle<Request>(_: Request, id: RequestID, from: ObjectIdentifier, reply: @escaping (JSONRPCResult<Request.Response>) -> Void) where Request: RequestType
+    func handle<Request>(_: Request, id: RequestID, from clientID: ObjectIdentifier) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType
 }

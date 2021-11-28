@@ -40,6 +40,13 @@ final class Client: ParsableCommand {
         print("HelloRequest response \(String(decoding: data, as: UTF8.self))")
     }
 
+    func sendUnknownRequest(client: JSONRPC) {
+        let request = UnknownRequest(name: "bob", data: ["age": 18])
+        let result = try! client.send(request).wait()
+        let data = try! encoder.encode(result)
+        print("HelloRequest response \(String(decoding: data, as: UTF8.self))")
+    }
+
     func sendNotification(client: JSONRPC) {
 //        let notification = HiNotification(message: "hi every one")
 //        client.send(notification)
@@ -48,13 +55,14 @@ final class Client: ParsableCommand {
     func run() throws {
         encoder.outputFormatting = .prettyPrinted.union(.sortedKeys).union(.withoutEscapingSlashes)
         if options.port > 0 {
-            let messageRegistry = MessageRegistry(requests: [HelloRequest.self],
+            let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
                                                   notifications: [HiNotification.self])
             let address = ("127.0.0.1", options.port)
             let client = JSONRPC(messageRegistry: messageRegistry)
             _ = try! client.startClient(host: address.0, port: address.1).wait()
-            sendRequest(client: client)
-            sendNotification(client: client)
+//            sendRequest(client: client)
+//            sendNotification(client: client)
+            sendUnknownRequest(client: client)
 //            let group = DispatchGroup()
 //            group.enter()
 //            group.wait()

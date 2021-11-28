@@ -15,12 +15,12 @@ public final class Notification<N: NotificationType> {
     public typealias Params = N
 
     /// The client of the request.
-    public let clientID: ObjectIdentifier?
+    public let clientID: ObjectIdentifier
 
     /// The request parameters.
     public let params: Params
 
-    public init(_ notification: Params, clientID: ObjectIdentifier?) {
+    public init(_ notification: Params, clientID: ObjectIdentifier) {
         self.clientID = clientID
         self.params = notification
     }

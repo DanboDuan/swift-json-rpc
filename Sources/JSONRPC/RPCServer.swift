@@ -19,4 +19,9 @@ extension JSONRPC: RPCServer {
         }
         handler.send(notification, to: client)
     }
+    
+    /// Register the given request handler.
+    public func register<R>(_ requestHandler: @escaping (Request<R>) -> Void) {
+        self.requestHandlers[ObjectIdentifier(R.self)] = requestHandler
+    }
 }

@@ -47,7 +47,7 @@ final class Server: ParsableCommand {
 
     func run() throws {
         if self.options.port > 0 {
-            let messageRegistry = MessageRegistry(requests: [HelloRequest.self],
+            let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
                                                   notifications: [HiNotification.self])
             let address = ("127.0.0.1", options.port)
             let server = JSONRPC(messageRegistry: messageRegistry)
