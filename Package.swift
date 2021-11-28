@@ -22,6 +22,10 @@ let package = Package(
         .executableTarget(name: "Example", dependencies: [
             "JSONRPC",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            .product(name: "Logging", package: "swift-log"),
+            .product(name: "NIO", package: "swift-nio"),
+            .product(name: "NIOFoundationCompat", package: "swift-nio"),
+            .product(name: "NIOExtras", package: "swift-nio-extras"),
         ]),
         .target(
             name: "JSONRPC",

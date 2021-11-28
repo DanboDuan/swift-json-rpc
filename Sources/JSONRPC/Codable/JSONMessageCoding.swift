@@ -12,7 +12,7 @@
 
 import NIO
 
-public let jsonrpcVersion = "2.0"
+let jsonrpcVersion = "2.0"
 
 /// *Public For Testing*. A single JSONRPC message suitable for encoding/decoding.
 public enum JSONRPCMessage {
@@ -21,8 +21,6 @@ public enum JSONRPCMessage {
     case response(ResponseType, id: RequestID)
     case errorResponse(ResponseError, id: RequestID?)
 }
-
-
 
 public extension CodingUserInfoKey {
     static let responseTypeCallbackKey = CodingUserInfoKey(rawValue: "jsonrpc.responseTypeCallback")!
@@ -34,7 +32,6 @@ protocol ResponseTypeCallback {
 }
 
 extension JSONRPCMessage: Codable {
-
     private enum CodingKeys: String, CodingKey {
         case jsonrpc
         case method

@@ -15,7 +15,6 @@
 import ArgumentParser
 import Dispatch
 import JSONRPC
-import NIO
 
 final class Server: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -34,13 +33,13 @@ final class Server: ParsableCommand {
 
     func hello(_ request: Request<HelloRequest>) {
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(60)) {
+            /// fake time cost jobs
             request.reply(HelloResult(greet: "hello \(request.params.name)"))
         }
-        
+
         request.addCancellationHandler {
             /// if request cancelled
         }
-        
         if let server = server {
             server.send(HiNotification(message: "hi"), to: .all)
         }

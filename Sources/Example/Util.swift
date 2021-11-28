@@ -13,7 +13,9 @@
 // limitations under the License.
 
 import Foundation
+import Logging
 
+/// for test
 public enum Util {
     static func isPortFree(_ port: UInt16) -> Bool {
         let socketFileDescriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
@@ -35,7 +37,7 @@ public enum Util {
             release(socket: socketFileDescriptor)
             return false
         }
-        if listen(socketFileDescriptor, SOMAXCONN ) == -1 {
+        if listen(socketFileDescriptor, SOMAXCONN) == -1 {
             release(socket: socketFileDescriptor)
             return false
         }
@@ -50,7 +52,7 @@ public enum Util {
 
     static func getFreePort() -> UInt16 {
         var portNum: UInt16 = 0
-        for i in 50000..<65000 {
+        for i in 50000 ..< 65000 {
             let isFree = isPortFree(UInt16(i))
             if isFree {
                 portNum = in_port_t(i)
@@ -59,5 +61,11 @@ public enum Util {
         }
 
         return 0
+    }
+
+    static func setupLog() {
+        LoggingSystem.bootstrap { label in
+            FileStreamLogHandler(label: label)
+        }
     }
 }

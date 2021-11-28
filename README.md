@@ -4,15 +4,16 @@
 
 # Feauture
 
-- base on Swift NIO
+- ✅ base on Swift NIO for high-performance
+- ✅ support Cancellation
+- ✅ user-friendly API
 - base on Codable
-- support Cancellation
-- user-friendly API
 
 # TODO
 
 - [ ] use `async` 
 - [ ] use DI framework to inject handlers
+- [ ] add unit test
 
 ## Usage
 
@@ -149,7 +150,7 @@ func hello(_ request: Request<HelloRequest>) {
 
 ```
 dependencies: [
-    .package(url: "https://github.com/DanboDuan/swift-json-rpc.git", .upToNextMajor(from: "0.1.0"))
+    .package(url: "https://github.com/DanboDuan/swift-json-rpc.git", .upToNextMajor(from: "1.0.0"))
 ]
 ```
 ## Recognition
