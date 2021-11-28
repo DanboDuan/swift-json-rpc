@@ -21,12 +21,18 @@ public struct CommandOptions: ParsableArguments {
         help: "connect port"
     )
     public var port = 8000
-    
+
+    @Option(
+        name: .customLong("uds"),
+        help: "connect path"
+    )
+    public var path: String?
+
     @Flag(
         name: [.customLong("version"), .customShort("v")],
         help: "Display the version of tool"
     )
     public var showVersion = false
-    
+
     public init() {}
 }

@@ -12,18 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Dispatch
 import Foundation
 import NIO
 import NIOCore
-
-public enum State: Equatable {
-    case initializing
-    case starting(String)
-    case started
-    case stopping
-    case stopped
-}
 
 struct RequestCancelKey: Hashable {
     public var client: ObjectIdentifier
@@ -37,8 +28,6 @@ struct RequestCancelKey: Hashable {
 public final class JSONRPC {
     let group: EventLoopGroup
     let config: Config
-    let messageRegistry: MessageRegistry
-
     var requestHandlers: [ObjectIdentifier: Any] = [:]
     var notificationHandlers: [ObjectIdentifier: Any] = [:]
 
@@ -46,10 +35,10 @@ public final class JSONRPC {
     var handler: JSONRPCMessageHandler?
     var channel: Channel?
 
-    public init(messageRegistry: MessageRegistry,
-                config: Config = Config())
-    {
-        self.messageRegistry = messageRegistry
+    private var _state = State.initializing
+    private let lock = NSLock()
+
+    init(config: Config) {
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: config.numberOfThreads)
         self.config = config
         self.state = .initializing
@@ -57,97 +46,22 @@ public final class JSONRPC {
         self.register(JSONRPC.onCancelRequestNotification)
     }
 
+    public static func createServer(config: Config) -> RPCServer {
+        let server = JSONRPC(config: config)
+        return server
+    }
+
+    public static func createClient(config: Config) -> RPCClient {
+        let client = JSONRPC(config: config)
+        return client
+    }
+
     deinit {
         assert(self.state == .stopped)
     }
+}
 
-    public func startClient(host: String, port: Int) -> EventLoopFuture<JSONRPC> {
-        assert(self.state == .initializing)
-
-        let handler = JSONRPCMessageHandler(self, type: .Client)
-        let bootstrap = ClientBootstrap(group: self.group)
-            .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-            .channelInitializer { channel in
-                channel.pipeline.addHandlers([IdleStateHandler(readTimeout: self.config.timeout), HalfCloseOnTimeout()])
-                    .flatMap {
-                        let framingHandler = ContentLengthHeaderCodec()
-                        return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
-                                                             MessageToByteHandler(framingHandler)])
-                    }.flatMap {
-                        channel.pipeline.addHandlers([
-                            CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry, callbackRegistry: handler),
-                            handler,
-                        ])
-                    }
-            }
-
-        self.state = .starting("\(host):\(port)")
-
-        return bootstrap.connect(host: host, port: port).flatMap { channel in
-            self.channel = channel
-            ///
-            self.state = .started
-            return channel.eventLoop.makeSucceededFuture(self)
-        }
-    }
-
-    public func startServer(host: String, port: Int) -> EventLoopFuture<JSONRPC> {
-        assert(self.state == .initializing)
-        let handler = JSONRPCMessageHandler(self, type: .Server)
-        self.handler = handler
-        let bootstrap = ServerBootstrap(group: group)
-            .serverChannelOption(ChannelOptions.backlog, value: 256)
-            .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-            .childChannelInitializer { channel in
-                channel.pipeline.addHandlers([IdleStateHandler(readTimeout: self.config.timeout), HalfCloseOnTimeout()])
-                    .flatMap {
-                        let framingHandler = ContentLengthHeaderCodec()
-                        return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
-                                                             MessageToByteHandler(framingHandler)])
-                    }.flatMap {
-                        channel.pipeline.addHandlers([CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: self.messageRegistry),
-                                                      handler])
-                    }
-            }
-            .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
-            .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-        self.state = .starting("\(host):\(port)")
-
-        return bootstrap.bind(host: host, port: port).flatMap { channel in
-            self.channel = channel
-            self.state = .started
-            return channel.eventLoop.makeSucceededFuture(self)
-        }
-    }
-
-    public func stop() {
-        let state = self.state
-        if state != .started {
-            return
-        }
-        guard let channel = self.channel else {
-            return
-        }
-        self.state = .stopping
-        channel.closeFuture.whenComplete { _ in
-            self.state = .stopped
-        }
-
-        return channel.close().whenComplete { _ in
-            do {
-                try self.group.syncShutdownGracefully()
-            } catch {
-                exit(0)
-            }
-        }
-    }
-
-    public var closeFuture: EventLoopFuture<Void> {
-        return self.channel!.closeFuture
-    }
-
-    private var _state = State.initializing
-    private let lock = NSLock()
+extension JSONRPC: RPCConnection {
     public var state: State {
         get {
             return self.lock.withLock {
@@ -160,6 +74,31 @@ public final class JSONRPC {
                 log("\(self) \(_state)")
             }
         }
+    }
+
+    public func stop() -> EventLoopFuture<Void> {
+        let state = self.state
+        if state != .started {
+            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+        }
+        guard let channel = self.channel else {
+            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+        }
+        self.state = .stopping
+        channel.closeFuture.whenComplete { _ in
+            self.state = .stopped
+            do {
+                try self.group.syncShutdownGracefully()
+            } catch {
+                exit(0)
+            }
+        }
+
+        return channel.close()
+    }
+
+    public var closeFuture: EventLoopFuture<Void> {
+        return self.channel!.closeFuture
     }
 }
 
@@ -217,8 +156,10 @@ extension JSONRPC: MessageHandler {
         let cancellationToken = CancellationToken()
         let key = RequestCancelKey(client: clientID, request: id)
 
-        self.requestCancellation[key] = cancellationToken
         let request = Request(params, id: id, clientID: clientID, cancellation: cancellationToken, promise: promise)
+
+        self.requestCancellation[key] = cancellationToken
+
         promise.futureResult.whenComplete { [weak self] _ in
             self?.requestCancellation[key] = nil
         }

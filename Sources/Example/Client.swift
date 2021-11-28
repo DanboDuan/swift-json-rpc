@@ -33,40 +33,51 @@ final class Client: ParsableCommand {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
 
-    func sendRequest(client: JSONRPC) {
+    func sendRequest(client: RPCClient) {
         let request = HelloRequest(name: "bob", data: ["age": 18])
-        let result = try! client.send(request).wait()
-        let data = try! encoder.encode(result)
-        print("HelloRequest response \(String(decoding: data, as: UTF8.self))")
+        let response = client.send(request)
+        response.cancel()
+        if let result = try? response.get().success {
+            let data = try! encoder.encode(result)
+            print("HelloRequest success \(String(decoding: data, as: UTF8.self))")
+        }
+        if let result = try? response.get().failure {
+            let data = try! encoder.encode(result)
+            print("HelloRequest failure \(String(decoding: data, as: UTF8.self))")
+        }
     }
 
-    func sendUnknownRequest(client: JSONRPC) {
+    func sendUnknownRequest(client: RPCClient) {
         let request = UnknownRequest(name: "bob", data: ["age": 18])
-        let result = try! client.send(request).wait()
+        let result = try! client.send(request).get()
         let data = try! encoder.encode(result)
-        print("HelloRequest response \(String(decoding: data, as: UTF8.self))")
+        print("UnknownRequest response \(String(decoding: data, as: UTF8.self))")
     }
 
-    func sendNotification(client: JSONRPC) {
-//        let notification = HiNotification(message: "hi every one")
-//        client.send(notification)
+    func sendNotification(client: RPCClient) {
+        let notification = HiNotification(message: "hi every one")
+        client.send(notification)
     }
 
     func run() throws {
         encoder.outputFormatting = .prettyPrinted.union(.sortedKeys).union(.withoutEscapingSlashes)
-        if options.port > 0 {
-            let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
-                                                  notifications: [HiNotification.self])
-            let address = ("127.0.0.1", options.port)
-            let client = JSONRPC(messageRegistry: messageRegistry)
-            _ = try! client.startClient(host: address.0, port: address.1).wait()
-//            sendRequest(client: client)
-//            sendNotification(client: client)
-            sendUnknownRequest(client: client)
-//            let group = DispatchGroup()
-//            group.enter()
-//            group.wait()
-            client.stop()
+        let address: ConnectionAddress
+        if let path = options.path {
+            address = .unixDomainSocket(path: path)
+        } else {
+            address = .ip(host: "127.0.0.1", port: options.port)
         }
+
+        let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
+                                              notifications: [HiNotification.self])
+
+        let config = Config(messageRegistry: messageRegistry)
+        let client = JSONRPC.createClient(config: config)
+        _ = try! client.connect(to: address).wait()
+        sendRequest(client: client)
+        sendNotification(client: client)
+        sendUnknownRequest(client: client)
+        try? client.closeFuture.wait()
+        try? client.stop().wait()
     }
 }

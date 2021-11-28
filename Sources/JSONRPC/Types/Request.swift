@@ -28,7 +28,7 @@ public final class Request<R: RequestType> {
     public let params: Params
 
     private var promise: EventLoopPromise<JSONRPCResult<Response>>
-    
+
     /// Whether a reply has been made. Every request must reply exactly once.
     private var replied: Bool = false {
         willSet {
@@ -39,7 +39,7 @@ public final class Request<R: RequestType> {
     /// The request's cancellation state.
     private let cancellationToken: CancellationToken
 
-    public init(_ request: Params, id: RequestID, clientID: ObjectIdentifier, cancellation: CancellationToken, promise: EventLoopPromise<JSONRPCResult<Response>>) {
+    init(_ request: Params, id: RequestID, clientID: ObjectIdentifier, cancellation: CancellationToken, promise: EventLoopPromise<JSONRPCResult<Response>>) {
         self.id = id
         self.clientID = clientID
         self.params = request
@@ -66,6 +66,7 @@ public final class Request<R: RequestType> {
             return
         }
         replied = true
+        // TODO: use fail
         promise.succeed(.failure(result))
     }
 
@@ -80,9 +81,10 @@ public final class Request<R: RequestType> {
 
     /// Whether the result has been cancelled.
     public var isCancelled: Bool { return cancellationToken.isCancelled }
-    
+
+    @discardableResult
     public func addCancellationHandler(_ handler: @escaping () -> Void) -> Disposable {
-        return self.cancellationToken.addCancellationHandler(handler)
+        return cancellationToken.addCancellationHandler(handler)
     }
 }
 

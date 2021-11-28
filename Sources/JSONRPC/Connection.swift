@@ -12,6 +12,14 @@
 
 import NIOCore
 
+public enum State: Equatable {
+    case initializing
+    case starting(String)
+    case started
+    case stopping
+    case stopped
+}
+
 public enum ClientType {
     case all
     case some(id: ObjectIdentifier)
@@ -28,19 +36,29 @@ public protocol ServerNotificationSender: AnyObject {
     func send<Notification>(_ notification: Notification, to client: ClientType) where Notification: NotificationType
 }
 
+public protocol RPCConnection {
+    func stop() -> EventLoopFuture<Void>
+    var closeFuture: EventLoopFuture<Void> { get }
+    var state: State { get }
+}
+
 /// An abstract client connection handler, allow server to send messages to a client
-public protocol RPCServer: NotificationHandlerRegistry, ServerNotificationSender {
+public protocol RPCServer: NotificationHandlerRegistry, ServerNotificationSender, RPCConnection {
+    /// bind
+    func bind(to address: ConnectionAddress) -> EventLoopFuture<Void>
     /// Register the given notification handler.
     func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void)
 }
 
 /// An abstract connection, allow messages to be sent to a (potentially remote) `MessageHandler`.
-public protocol RPCClient: NotificationHandlerRegistry {
+public protocol RPCClient: NotificationHandlerRegistry, RPCConnection {
+    /// connect
+    func connect(to address: ConnectionAddress) -> EventLoopFuture<Void>
     /// Send a notification without a reply.
     func send<Notification>(_ notification: Notification) where Notification: NotificationType
 
     /// Send a request and receive a reply.
-    func send<Request>(_ request: Request) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType
+    func send<Request>(_ request: Request) -> Response<Request> where Request: RequestType
 }
 
 /// An abstract message handler, such as a language server or client.

@@ -27,7 +27,6 @@ public struct HelloRequest: RequestType, Hashable {
 }
 
 public struct HelloResult: ResponseType, Hashable {
-    /// Name of the server
     public var greet: String
 
     public init(greet: String) {

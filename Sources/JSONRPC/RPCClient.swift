@@ -14,15 +14,19 @@
 
 import Foundation
 import NIOCore
+import NIOPosix
 
 extension JSONRPC: RPCClient {
-    @discardableResult
-    public func send<Request>(_ request: Request) -> EventLoopFuture<JSONRPCResult<Request.Response>> where Request: RequestType {
+    
+    public func send<Request>(_ request: Request) -> Response<Request> where Request: RequestType {
+        let id = RequestID.string(UUID().uuidString)
+
         guard let channel = self.channel else {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+            let error = ResponseError(code: .invalidRequest, message: "client not started")
+            let result: EventLoopFuture<JSONRPCResult<Request.Response>> = self.group.next().makeSucceededFuture(.failure(error))
+            return Response<Request>(requestID: id, result: result, client: self)
         }
 
-        let id = RequestID.string(UUID().uuidString)
         let promise: EventLoopPromise<JSONRPCMessage> = channel.eventLoop.makePromise()
         let future = channel.eventLoop.submit {
             let wrapper = JSONRPCMessageWrapper(message: .request(request, id: id), promise: promise)
@@ -43,9 +47,7 @@ extension JSONRPC: RPCClient {
             }
         }
 
-//        let response = Response<Request>(requestID: id, result: result, client: self)
-
-        return result
+        return Response<Request>(requestID: id, result: result, client: self)
     }
 
     public func send<Notification>(_ notification: Notification) where Notification: NotificationType {
@@ -56,6 +58,46 @@ extension JSONRPC: RPCClient {
         channel.eventLoop.execute {
             let wrapper = JSONRPCMessageWrapper(message: .notification(notification), promise: nil)
             _ = channel.writeAndFlush(wrapper)
+        }
+    }
+
+    public func connect(to address: ConnectionAddress) -> EventLoopFuture<Void> {
+        assert(self.state == .initializing)
+
+        let handler = JSONRPCMessageHandler(self, type: .Client)
+        let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: config.messageRegistry,
+                                                                 maxPayload: self.config.maxPayload,
+                                                                 callbackRegistry: handler)
+        let timeout = TimeAmount.seconds(config.timeout)
+        let bootstrap = ClientBootstrap(group: self.group)
+            .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
+            .channelInitializer { channel in
+                channel.pipeline.addHandlers([IdleStateHandler(readTimeout: timeout), HalfCloseOnTimeout()])
+                    .flatMap {
+                        let framingHandler = ContentLengthHeaderCodec()
+                        return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
+                                                             MessageToByteHandler(framingHandler)])
+                    }.flatMap {
+                        channel.pipeline.addHandlers([
+                            codec,
+                            handler,
+                        ])
+                    }
+            }
+
+        self.state = .starting(address.description)
+        let future: EventLoopFuture<Channel>
+        switch address {
+        case .ip(host: let host, port: let port):
+            future = bootstrap.connect(host: host, port: port)
+        case .unixDomainSocket(path: let path):
+            future = bootstrap.connect(unixDomainSocketPath: path)
+        }
+        return future.flatMap { channel in
+            self.channel = channel
+            ///
+            self.state = .started
+            return channel.eventLoop.makeSucceededVoidFuture()
         }
     }
 }

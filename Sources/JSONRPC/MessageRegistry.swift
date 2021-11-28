@@ -18,7 +18,8 @@ public final class MessageRegistry {
                 notifications: [NotificationType.Type])
     {
         self.methodToRequest = Dictionary(uniqueKeysWithValues: requests.map { ($0.method, $0) })
-        self.methodToNotification = Dictionary(uniqueKeysWithValues: notifications.map { ($0.method, $0) })
+        let final = [CancelRequestNotification.self] + notifications
+        self.methodToNotification = Dictionary(uniqueKeysWithValues: final.map { ($0.method, $0) })
     }
 
     /// Returns the type of the message named `method`, or nil if it is unknown.

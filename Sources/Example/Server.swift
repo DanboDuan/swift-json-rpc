@@ -30,33 +30,46 @@ final class Server: ParsableCommand {
         case options
     }
 
-    private var server: JSONRPC?
-    
+    private var server: RPCServer?
+
     func hello(_ request: Request<HelloRequest>) {
-        request.reply(HelloResult(greet: "hello \(request.params.name)"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(60)) {
+            request.reply(HelloResult(greet: "hello \(request.params.name)"))
+        }
+        
+        request.addCancellationHandler {
+            /// if request cancelled
+        }
+        
         if let server = server {
             server.send(HiNotification(message: "hi"), to: .all)
         }
     }
 
     func hi(_ notification: Notification<HiNotification>) {
-//        if let server = server {
-//            server.send(HiNotification(message: "hi"))
-//        }
+        if let server = server {
+            server.send(HiNotification(message: "hi"), to: .all)
+        }
     }
 
     func run() throws {
-        if self.options.port > 0 {
-            let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
-                                                  notifications: [HiNotification.self])
-            let address = ("127.0.0.1", options.port)
-            let server = JSONRPC(messageRegistry: messageRegistry)
-
-            server.register(self.hello)
-            server.register(self.hi)
-            self.server = server
-            _ = try! server.startServer(host: address.0, port: address.1).wait()
-            try? server.closeFuture.wait()
+        let address: ConnectionAddress
+        if let path = options.path {
+            address = .unixDomainSocket(path: path)
+        } else {
+            address = .ip(host: "127.0.0.1", port: self.options.port)
         }
+        let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
+                                              notifications: [HiNotification.self])
+        let config = Config(messageRegistry: messageRegistry)
+        let server = JSONRPC.createServer(config: config)
+
+        server.register(self.hi)
+        server.register { (request: Request<HelloRequest>) in
+            request.reply(HelloResult(greet: "hello \(request.params.name)"))
+        }
+        self.server = server
+        _ = try! server.bind(to: address).wait()
+        try? server.closeFuture.wait()
     }
 }

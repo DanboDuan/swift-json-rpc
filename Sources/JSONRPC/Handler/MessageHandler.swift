@@ -71,13 +71,27 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
         case .notification(let notification):
             notification._handle(self.receiveHandler, from: ObjectIdentifier(context.channel))
         case .request(let request, id: let id):
-            request._handle(self.receiveHandler, id: id, from: ObjectIdentifier(context.channel)).whenSuccess { response in
+            let future = request._handle(self.receiveHandler, id: id, from: ObjectIdentifier(context.channel))
+
+            future.whenSuccess { response in
                 let result: JSONRPCMessage
                 switch response {
                 case .success(let value):
                     result = JSONRPCMessage.response(value, id: id)
                 case .failure(let error):
                     result = JSONRPCMessage.errorResponse(error, id: id)
+                }
+                context.eventLoop.execute {
+                    context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
+                }
+            }
+            future.whenFailure { error in
+                let result: JSONRPCMessage
+                if let response = error as? ResponseError {
+                    result = JSONRPCMessage.errorResponse(response, id: id)
+                } else {
+                    let response = ResponseError(code: .unknownErrorCode, error: error)
+                    result = JSONRPCMessage.errorResponse(response, id: id)
                 }
                 context.eventLoop.execute {
                     context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)

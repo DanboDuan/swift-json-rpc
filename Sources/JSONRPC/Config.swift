@@ -15,21 +15,39 @@
 import Foundation
 import NIO
 
+public enum ConnectionAddress {
+    case ip(host: String, port: Int)
+    case unixDomainSocket(path: String)
+}
+
+extension ConnectionAddress: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .ip(let host, let port):
+            return "\(host):\(port)"
+        case .unixDomainSocket(let path):
+            return path
+        }
+    }
+}
+
 public struct Config {
-    public let timeout: TimeAmount
+    public let timeout: Int64
     public let maxPayload: Int
     public let log: Bool
     public let numberOfThreads: Int
-    public init(timeout: TimeAmount = TimeAmount.seconds(3600),
+    public let messageRegistry: MessageRegistry
+
+    public init(messageRegistry: MessageRegistry,
+                timeout: Int64 = 3600,
                 maxPayload: Int = 1_000_000,
                 log: Bool = true,
                 numberOfThreads: Int = System.coreCount)
     {
+        self.messageRegistry = messageRegistry
         self.timeout = timeout
         self.maxPayload = maxPayload
         self.log = log
         self.numberOfThreads = numberOfThreads
     }
 }
-
-

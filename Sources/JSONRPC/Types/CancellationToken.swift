@@ -13,12 +13,14 @@
 import Foundation
 
 public final class CancellationToken {
+    // TODO: add lock or atomic
     public var isCancelled = false
 
     private var cancellationHandlers: [String: () -> Void] = [:]
 
     public init() {}
 
+    @discardableResult
     public func addCancellationHandler(_ handler: @escaping () -> Void) -> Disposable {
         if isCancelled {
             return Disposable()
@@ -33,11 +35,11 @@ public final class CancellationToken {
 
     public func cancel() {
         if !isCancelled {
-            isCancelled = true
             cancellationHandlers.forEach { _, handler in
                 handler()
             }
             cancellationHandlers.removeAll()
+            isCancelled = true
         }
     }
 }

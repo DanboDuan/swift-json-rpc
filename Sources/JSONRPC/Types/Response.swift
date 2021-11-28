@@ -21,12 +21,13 @@ public final class Response<R: RequestType> {
     private var client: RPCClient
     private var cancelled = false
 
-    public init(requestID: RequestID, result: EventLoopFuture<JSONRPCResult<Response>>, client: RPCClient) {
+    init(requestID: RequestID, result: EventLoopFuture<JSONRPCResult<Response>>, client: RPCClient) {
         self.requestID = requestID
         self.result = result
         self.client = client
     }
 
+    // TODO: use async api
     public func get() throws -> JSONRPCResult<Response> {
         return try result.wait()
     }

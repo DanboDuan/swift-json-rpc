@@ -16,8 +16,6 @@ import Foundation
 import NIO
 import NIOFoundationCompat
 
-internal let maxPayload = 1_000_000 // 1MB
-
 // bytes to codable and back
 // <Response, Request>
 final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler where In: Decodable, Out: Encodable {
@@ -26,12 +24,15 @@ final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler
     public typealias OutboundIn = Out
     public typealias OutboundOut = ByteBuffer
 
+    private let maxPayload: Int
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    public init(messageRegistry: MessageRegistry? = nil,
+    public init(messageRegistry: MessageRegistry,
+                maxPayload: Int,
                 callbackRegistry: ResponseTypeCallback? = nil)
     {
+        self.maxPayload = maxPayload
         self.encoder.outputFormatting = .withoutEscapingSlashes
         self.decoder.userInfo[.messageRegistryKey] = messageRegistry
         self.decoder.userInfo[.responseTypeCallbackKey] = callbackRegistry
@@ -64,7 +65,7 @@ final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler
         do {
             let encodable = self.unwrapOutboundIn(data)
             let data = try encoder.encode(encodable)
-            guard data.count < maxPayload else {
+            guard data.count < self.maxPayload else {
                 promise?.fail(CodecError.requestTooLarge)
                 return
             }
