@@ -33,9 +33,9 @@ final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler
                 callbackRegistry: ResponseTypeCallback? = nil)
     {
         self.maxPayload = maxPayload
-        self.encoder.outputFormatting = .withoutEscapingSlashes
-        self.decoder.userInfo[.messageRegistryKey] = messageRegistry
-        self.decoder.userInfo[.responseTypeCallbackKey] = callbackRegistry
+        encoder.outputFormatting = .withoutEscapingSlashes
+        decoder.userInfo[.messageRegistryKey] = messageRegistry
+        decoder.userInfo[.responseTypeCallbackKey] = callbackRegistry
     }
 
     /// inbound
@@ -49,7 +49,7 @@ final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler
         let data = buffer.readData(length: buffer.readableBytes)!
         do {
             log("--> \(String(decoding: data, as: UTF8.self))")
-            let decodable = try self.decoder.decode(In.self, from: data)
+            let decodable = try decoder.decode(In.self, from: data)
             // call next handler
             context.fireChannelRead(wrapInboundOut(decodable))
         } catch let error as DecodingError {
@@ -63,9 +63,9 @@ final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutboundHandler
     /// JSONRPCMessage to ByteBuffer
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         do {
-            let encodable = self.unwrapOutboundIn(data)
+            let encodable = unwrapOutboundIn(data)
             let data = try encoder.encode(encodable)
-            guard data.count < self.maxPayload else {
+            guard data.count < maxPayload else {
                 promise?.fail(CodecError.requestTooLarge)
                 return
             }

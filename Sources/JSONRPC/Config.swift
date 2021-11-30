@@ -23,9 +23,9 @@ public enum ConnectionAddress {
 extension ConnectionAddress: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .ip(let host, let port):
+        case let .ip(host, port):
             return "\(host):\(port)"
-        case .unixDomainSocket(let path):
+        case let .unixDomainSocket(path):
             return path
         }
     }

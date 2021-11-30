@@ -45,7 +45,7 @@ final class Server: ParsableCommand {
         }
     }
 
-    func hi(_ notification: Notification<HiNotification>) {
+    func hi(_: Notification<HiNotification>) {
         if let server = server {
             server.send(HiNotification(message: "hi"), to: .all)
         }
@@ -56,14 +56,14 @@ final class Server: ParsableCommand {
         if let path = options.path {
             address = .unixDomainSocket(path: path)
         } else {
-            address = .ip(host: "127.0.0.1", port: self.options.port)
+            address = .ip(host: "127.0.0.1", port: options.port)
         }
         let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
                                               notifications: [HiNotification.self])
         let config = Config(messageRegistry: messageRegistry)
         let server = JSONRPC.createServer(config: config)
 
-        server.register(self.hi)
+        server.register(hi)
         server.register { (request: Request<HelloRequest>) in
             request.reply(HelloResult(greet: "hello \(request.params.name)"))
         }

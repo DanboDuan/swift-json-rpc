@@ -52,17 +52,17 @@ extension JSONAny: Encodable {
         switch self {
         case .null:
             try container.encodeNil()
-        case .int(let value):
+        case let .int(value):
             try container.encode(value)
-        case .bool(let value):
+        case let .bool(value):
             try container.encode(value)
-        case .double(let value):
+        case let .double(value):
             try container.encode(value)
-        case .string(let value):
+        case let .string(value):
             try container.encode(value)
-        case .array(let value):
+        case let .array(value):
             try container.encode(value)
-        case .dictionary(let value):
+        case let .dictionary(value):
             try container.encode(value)
         }
     }
@@ -128,7 +128,7 @@ extension Optional: JSONAnyCodable where Wrapped: JSONAnyCodable {
             self = .none
             return
         }
-        guard case .dictionary(let dict) = value else {
+        guard case let .dictionary(dict) = value else {
             return nil
         }
         guard let wrapped = Wrapped(fromJSONRPCDictionary: dict) else {
@@ -137,8 +137,8 @@ extension Optional: JSONAnyCodable where Wrapped: JSONAnyCodable {
         self = .some(wrapped)
     }
 
-    public init?(fromJSONRPCDictionary dictionary: [String: JSONAny]) {
-        return nil
+    public init?(fromJSONRPCDictionary _: [String: JSONAny]) {
+        nil
     }
 
     public func encodeToJSONAny() -> JSONAny {
@@ -149,11 +149,11 @@ extension Optional: JSONAnyCodable where Wrapped: JSONAnyCodable {
 
 extension Array: JSONAnyCodable where Element: JSONAnyCodable {
     public init?(fromJSONRPCArray array: JSONAny) {
-        guard case .array(let array) = array else {
+        guard case let .array(array) = array else {
             return nil
         }
         var result = [Element]()
-        for case .dictionary(let editDict) in array {
+        for case let .dictionary(editDict) in array {
             guard let element = Element(fromJSONRPCDictionary: editDict) else {
                 return nil
             }
@@ -162,11 +162,11 @@ extension Array: JSONAnyCodable where Element: JSONAnyCodable {
         self = result
     }
 
-    public init?(fromJSONRPCDictionary dictionary: [String: JSONAny]) {
-        return nil
+    public init?(fromJSONRPCDictionary _: [String: JSONAny]) {
+        nil
     }
 
     public func encodeToJSONAny() -> JSONAny {
-        return .array(map { $0.encodeToJSONAny() })
+        .array(map { $0.encodeToJSONAny() })
     }
 }

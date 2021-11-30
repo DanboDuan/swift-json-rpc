@@ -17,18 +17,18 @@ public final class MessageRegistry {
     public init(requests: [_RequestType.Type],
                 notifications: [NotificationType.Type])
     {
-        self.methodToRequest = Dictionary(uniqueKeysWithValues: requests.map { ($0.method, $0) })
+        methodToRequest = Dictionary(uniqueKeysWithValues: requests.map { ($0.method, $0) })
         let final = [CancelRequestNotification.self] + notifications
-        self.methodToNotification = Dictionary(uniqueKeysWithValues: final.map { ($0.method, $0) })
+        methodToNotification = Dictionary(uniqueKeysWithValues: final.map { ($0.method, $0) })
     }
 
     /// Returns the type of the message named `method`, or nil if it is unknown.
     public func requestType(for method: String) -> _RequestType.Type? {
-        return methodToRequest[method]
+        methodToRequest[method]
     }
 
     /// Returns the type of the message named `method`, or nil if it is unknown.
     public func notificationType(for method: String) -> NotificationType.Type? {
-        return methodToNotification[method]
+        methodToNotification[method]
     }
 }

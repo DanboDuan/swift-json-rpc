@@ -38,12 +38,12 @@ public final class JSONRPC {
     private var _state = State.initializing
     private let lock = NSLock()
 
-    init(config: Config) {
-        self.group = MultiThreadedEventLoopGroup(numberOfThreads: config.numberOfThreads)
+    private init(config: Config) {
+        group = MultiThreadedEventLoopGroup(numberOfThreads: config.numberOfThreads)
         self.config = config
-        self.state = .initializing
+        state = .initializing
         JSONRPCLogger.shared.enable = config.log
-        self.register(JSONRPC.onCancelRequestNotification)
+        register(JSONRPC.onCancelRequestNotification)
     }
 
     public static func createServer(config: Config) -> RPCServer {
@@ -57,48 +57,44 @@ public final class JSONRPC {
     }
 
     deinit {
-        assert(self.state == .stopped)
+        assert(self.state == .stopped || self.state == .initializing)
     }
 }
 
 extension JSONRPC: RPCConnection {
     public var state: State {
         get {
-            return self.lock.withLock {
+            lock.withLock {
                 _state
             }
         }
         set {
-            self.lock.withLock {
+            lock.withLock {
                 _state = newValue
                 log("\(self) \(_state)")
             }
         }
     }
 
-    public func stop() -> EventLoopFuture<Void> {
-        let state = self.state
+    public func stop() throws {
+        let state = state
         if state != .started {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+            return
         }
-        guard let channel = self.channel else {
-            return self.group.next().makeFailedFuture(ConnectionError.notReady)
+        guard let channel = channel else {
+            return
         }
         self.state = .stopping
         channel.closeFuture.whenComplete { _ in
             self.state = .stopped
-            do {
-                try self.group.syncShutdownGracefully()
-            } catch {
-                exit(0)
-            }
         }
 
-        return channel.close()
+        try channel.close().wait()
+        try group.syncShutdownGracefully()
     }
 
     public var closeFuture: EventLoopFuture<Void> {
-        return self.channel!.closeFuture
+        channel!.closeFuture
     }
 }
 
@@ -111,7 +107,7 @@ extension JSONRPC: NotificationHandlerRegistry {
     func register<Server, R>(_ requestHandler: @escaping (Server) -> (Request<R>) -> Void) {
         // We can use `unowned` here because the handler is run synchronously on `queue`.
         precondition(self is Server)
-        self.requestHandlers[ObjectIdentifier(R.self)] = { [unowned self] request in
+        requestHandlers[ObjectIdentifier(R.self)] = { [unowned self] request in
             requestHandler(self as! Server)(request)
         }
     }
@@ -121,19 +117,19 @@ extension JSONRPC: NotificationHandlerRegistry {
     /// Must be called on `queue`.
     func register<Server, N>(_ noteHandler: @escaping (Server) -> (Notification<N>) -> Void) {
         // We can use `unowned` here because the handler is run synchronously on `queue`.
-        self.notificationHandlers[ObjectIdentifier(N.self)] = { [unowned self] note in
+        notificationHandlers[ObjectIdentifier(N.self)] = { [unowned self] note in
             noteHandler(self as! Server)(note)
         }
     }
 
     /// Register the given notification handler.
     public func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void) {
-        self.notificationHandlers[ObjectIdentifier(N.self)] = noteHandler
+        notificationHandlers[ObjectIdentifier(N.self)] = noteHandler
     }
 
     public func onCancelRequestNotification(_ notification: Notification<CancelRequestNotification>) {
         let key = RequestCancelKey(client: notification.clientID, request: notification.params.id)
-        self.requestCancellation[key]?.cancel()
+        requestCancellation[key]?.cancel()
     }
 }
 
@@ -149,21 +145,21 @@ extension JSONRPC: MessageHandler {
     public func handle<R>(_ params: R, id: RequestID, from clientID: ObjectIdentifier) -> EventLoopFuture<JSONRPCResult<R.Response>> where R: RequestType {
         guard let handler = requestHandlers[ObjectIdentifier(R.self)] as? ((Request<R>) -> Void) else {
             let error = ResponseError.methodNotFound(R.method)
-            return self.group.next().makeSucceededFuture(.failure(error))
+            return group.next().makeSucceededFuture(.failure(error))
         }
 
-        let promise: EventLoopPromise<JSONRPCResult<R.Response>> = self.group.next().makePromise()
+        let promise: EventLoopPromise<JSONRPCResult<R.Response>> = group.next().makePromise()
         let cancellationToken = CancellationToken()
         let key = RequestCancelKey(client: clientID, request: id)
 
         let request = Request(params, id: id, clientID: clientID, cancellation: cancellationToken, promise: promise)
 
-        self.requestCancellation[key] = cancellationToken
+        requestCancellation[key] = cancellationToken
 
         promise.futureResult.whenComplete { [weak self] _ in
             self?.requestCancellation[key] = nil
         }
-        let future = self.group.next().submit {
+        let future = group.next().submit {
             handler(request)
         }
 

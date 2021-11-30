@@ -25,7 +25,7 @@ final class ContentLengthHeaderCodec: MessageToByteEncoder, ByteToMessageDecoder
     private var scratchBuffer: ByteBuffer!
 
     public init() {
-        self.scratchBuffer = ByteBuffer()
+        scratchBuffer = ByteBuffer()
     }
 
     public func encode(data: OutboundIn, out: inout ByteBuffer) throws {

@@ -42,9 +42,9 @@ extension Swift.Result: Codable
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case .success(let value):
+        case let .success(value):
             try value.encode(to: container.superEncoder(forKey: .success))
-        case .failure(let value):
+        case let .failure(value):
             try value.encode(to: container.superEncoder(forKey: .failure))
         }
     }
@@ -52,7 +52,7 @@ extension Swift.Result: Codable
     /// Project out the .success value, or nil.
     public var success: Success? {
         switch self {
-        case .success(let value):
+        case let .success(value):
             return value
         default:
             return nil
@@ -62,7 +62,7 @@ extension Swift.Result: Codable
     /// Project out the .failure value, or nil.
     public var failure: Failure? {
         switch self {
-        case .failure(let error):
+        case let .failure(error):
             return error
         default:
             return nil

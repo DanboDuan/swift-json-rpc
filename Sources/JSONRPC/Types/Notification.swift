@@ -22,13 +22,13 @@ public final class Notification<N: NotificationType> {
 
     public init(_ notification: Params, clientID: ObjectIdentifier) {
         self.clientID = clientID
-        self.params = notification
+        params = notification
     }
 }
 
 extension Notification: CustomStringConvertible {
     public var description: String {
-        return """
+        """
         Notification<\(N.method)>(
           clientID: \(String(describing: clientID)),
           params: \(params)

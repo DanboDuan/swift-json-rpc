@@ -45,7 +45,6 @@ public protocol NotificationType: MessageType {
 }
 
 public extension RequestType {
-    
     func _handle(
         _ handler: MessageHandler,
         id: RequestID,
@@ -58,11 +57,11 @@ public extension RequestType {
     }
 
     func _cancelledResponse() -> Response? {
-        return nil
+        nil
     }
 
     func responseType() -> ResponseType.Type {
-        return Response.self
+        Response.self
     }
 }
 

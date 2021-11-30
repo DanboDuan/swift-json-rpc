@@ -112,14 +112,14 @@ extension JSONRPCMessage: Codable {
             error.messageKind = msgKind
             throw error
 
-        } catch DecodingError.keyNotFound(let key, _) {
+        } catch let DecodingError.keyNotFound(key, _) {
             throw MessageDecodingError.invalidParams("missing expected parameter: \(key.stringValue)", id: id, messageKind: msgKind)
 
-        } catch DecodingError.valueNotFound(_, let context) {
+        } catch let DecodingError.valueNotFound(_, context) {
             throw MessageDecodingError.invalidParams("missing expected parameter: \(context.codingPath.last?.stringValue ?? "unknown")", id: id, messageKind: msgKind)
 
-        } catch DecodingError.typeMismatch(_, let context) {
-            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+        } catch let DecodingError.typeMismatch(_, context) {
+            let path = context.codingPath.map(\.stringValue).joined(separator: ".")
             throw MessageDecodingError.invalidParams("type mismatch at \(path) : \(context.debugDescription)", id: id, messageKind: msgKind)
 
         } catch {
@@ -132,20 +132,20 @@ extension JSONRPCMessage: Codable {
         try container.encode(jsonrpcVersion, forKey: .jsonrpc)
 
         switch self {
-        case .notification(let params):
+        case let .notification(params):
             try container.encode(type(of: params).method, forKey: .method)
             try params.encode(to: container.superEncoder(forKey: .params))
 
-        case .request(let params, let id):
+        case let .request(params, id):
             try container.encode(type(of: params).method, forKey: .method)
             try container.encode(id, forKey: .id)
             try params.encode(to: container.superEncoder(forKey: .params))
 
-        case .response(let result, let id):
+        case let .response(result, id):
             try container.encode(id, forKey: .id)
             try result.encode(to: container.superEncoder(forKey: .result))
 
-        case .errorResponse(let error, let id):
+        case let .errorResponse(error, id):
             try container.encode(id, forKey: .id)
             try container.encode(error, forKey: .error)
         }

@@ -26,8 +26,8 @@ public enum ClientType {
 }
 
 public protocol NotificationHandlerRegistry: AnyObject {
-    /// Register the given request handler.
-    func register<R>(_ requestHandler: @escaping (Request<R>) -> Void)
+    /// Register the given notification handler.
+    func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void)
 }
 
 public protocol ServerNotificationSender: AnyObject {
@@ -37,7 +37,7 @@ public protocol ServerNotificationSender: AnyObject {
 }
 
 public protocol RPCConnection {
-    func stop() -> EventLoopFuture<Void>
+    func stop() throws
     var closeFuture: EventLoopFuture<Void> { get }
     var state: State { get }
 }
@@ -46,8 +46,8 @@ public protocol RPCConnection {
 public protocol RPCServer: NotificationHandlerRegistry, ServerNotificationSender, RPCConnection {
     /// bind
     func bind(to address: ConnectionAddress) -> EventLoopFuture<Void>
-    /// Register the given notification handler.
-    func register<N>(_ noteHandler: @escaping (Notification<N>) -> Void)
+    /// Register the given request handler.
+    func register<R>(_ requestHandler: @escaping (Request<R>) -> Void)
 }
 
 /// An abstract connection, allow messages to be sent to a (potentially remote) `MessageHandler`.

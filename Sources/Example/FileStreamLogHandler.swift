@@ -13,15 +13,15 @@
 // limitations under the License.
 
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-import Darwin
+    import Darwin
 #elseif os(Windows)
-import CRT
+    import CRT
 #elseif canImport(Glibc)
-import Glibc
+    import Glibc
 #elseif canImport(WASILibc)
-import WASILibc
+    import WASILibc
 #else
-#error("Unsupported runtime")
+    #error("Unsupported runtime")
 #endif
 import Foundation
 import Logging
@@ -40,25 +40,25 @@ final class NIOLoggerWriter {
 
     public init(_ path: String) {
         let threadPool = NIOThreadPool(numberOfThreads: 1)
-        self.fileIO = NonBlockingFileIO(threadPool: threadPool)
+        fileIO = NonBlockingFileIO(threadPool: threadPool)
         threadPool.start()
-        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        self.futureFileHandle = self.fileIO.openFile(path: path,
-                                                     mode: .write,
-                                                     flags: .allowFileCreation(),
-                                                     eventLoop: self.eventLoopGroup.next())
+        eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        futureFileHandle = fileIO.openFile(path: path,
+                                           mode: .write,
+                                           flags: .allowFileCreation(),
+                                           eventLoop: eventLoopGroup.next())
     }
 
     public func log(log: String) {
         #if DEBUG
-        print(log, terminator: "")
+            print(log, terminator: "")
         #endif
         let data = log.data(using: .utf8)!
-        var buffer = self.allocator.buffer(capacity: data.count)
+        var buffer = allocator.buffer(capacity: data.count)
         buffer.writeBytes(data)
-        let fileIO = self.fileIO
-        let eventLoopGroup = self.eventLoopGroup
-        self.futureFileHandle.whenSuccess { handle in
+        let fileIO = fileIO
+        let eventLoopGroup = eventLoopGroup
+        futureFileHandle.whenSuccess { handle in
             self.writeFuture = fileIO.write(fileHandle: handle,
                                             buffer: buffer,
                                             eventLoop: eventLoopGroup.next())
@@ -66,7 +66,7 @@ final class NIOLoggerWriter {
     }
 
     private func close() {
-        if let fileHandle = try? self.futureFileHandle.wait() {
+        if let fileHandle = try? futureFileHandle.wait() {
             try? fileHandle.close()
         }
     }
@@ -79,16 +79,16 @@ public final class FileStreamLogHandler: LogHandler {
 
     public var metadata = Logger.Metadata() {
         didSet {
-            self.prettyMetadata = self.prettify(self.metadata)
+            prettyMetadata = prettify(metadata)
         }
     }
 
     public subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
         get {
-            return self.metadata[metadataKey]
+            metadata[metadataKey]
         }
         set {
-            self.metadata[metadataKey] = newValue
+            metadata[metadataKey] = newValue
         }
     }
 
@@ -99,21 +99,21 @@ public final class FileStreamLogHandler: LogHandler {
     public func log(level: Logger.Level,
                     message: Logger.Message,
                     metadata: Logger.Metadata?,
-                    source: String,
-                    file: String,
-                    function: String,
-                    line: UInt)
+                    source _: String,
+                    file _: String,
+                    function _: String,
+                    line _: UInt)
     {
         let prettyMetadata = metadata?.isEmpty ?? true
-            ? self.prettyMetadata
-            : self.prettify(self.metadata.merging(metadata!, uniquingKeysWith: { _, new in new }))
+            ? prettyMetadata
+            : prettify(self.metadata.merging(metadata!, uniquingKeysWith: { _, new in new }))
 
-        let data = "\(self.timestamp()) \(level) \(self.label) :\(prettyMetadata.map { " \($0)" } ?? "") \(message)\n"
+        let data = "\(timestamp()) \(level) \(label) :\(prettyMetadata.map { " \($0)" } ?? "") \(message)\n"
         NIOLoggerWriter.shared.log(log: data)
     }
 
     private func prettify(_ metadata: Logger.Metadata) -> String? {
-        return !metadata.isEmpty
+        !metadata.isEmpty
             ? metadata.lazy.sorted(by: { $0.key < $1.key }).map { "\($0)=\($1)" }.joined(separator: " ")
             : nil
     }

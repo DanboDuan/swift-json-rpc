@@ -25,14 +25,14 @@ extension JSONRPC: RPCServer {
 
     /// Register the given request handler.
     public func register<R>(_ requestHandler: @escaping (Request<R>) -> Void) {
-        self.requestHandlers[ObjectIdentifier(R.self)] = requestHandler
+        requestHandlers[ObjectIdentifier(R.self)] = requestHandler
     }
 
     public func bind(to address: ConnectionAddress) -> EventLoopFuture<Void> {
-        assert(self.state == .initializing)
+        assert(state == .initializing)
         let handler = JSONRPCMessageHandler(self, type: .Server)
         let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: config.messageRegistry,
-                                                                 maxPayload: self.config.maxPayload)
+                                                                 maxPayload: config.maxPayload)
         let timeout = TimeAmount.seconds(config.timeout)
         self.handler = handler
         let bootstrap = ServerBootstrap(group: group)
@@ -52,13 +52,16 @@ extension JSONRPC: RPCServer {
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
             .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
 
-        self.state = .starting(address.description)
+        state = .starting(address.description)
         let future: EventLoopFuture<Channel>
         switch address {
-        case .ip(host: let host, port: let port):
+        case let .ip(host: host, port: port):
             future = bootstrap.bind(host: host, port: port)
-        case .unixDomainSocket(path: let path):
+        case let .unixDomainSocket(path: path):
             future = bootstrap.bind(unixDomainSocketPath: path, cleanupExistingSocketFile: true)
+        }
+        future.whenFailure { _ in
+            self.state = .stopped
         }
         return future.flatMap { channel in
             self.channel = channel

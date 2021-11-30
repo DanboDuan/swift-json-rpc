@@ -13,5 +13,20 @@
 			".build": true,
 			".swiftpm": true
 		}
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "format",
+				"command":"swiftformat",
+				"options": {
+					"cwd": "${workspaceFolder}"
+				},
+				"args": [
+					""
+				]
+			}
+		]
 	}
 }

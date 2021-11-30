@@ -52,7 +52,7 @@ public enum Util {
 
     static func getFreePort() -> UInt16 {
         var portNum: UInt16 = 0
-        for i in 50000 ..< 65000 {
+        for i in 50000 ..< UInt16.max {
             let isFree = isPortFree(UInt16(i))
             if isFree {
                 portNum = in_port_t(i)

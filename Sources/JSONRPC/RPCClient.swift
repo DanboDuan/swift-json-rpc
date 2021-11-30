@@ -17,13 +17,12 @@ import NIOCore
 import NIOPosix
 
 extension JSONRPC: RPCClient {
-    
     public func send<Request>(_ request: Request) -> Response<Request> where Request: RequestType {
         let id = RequestID.string(UUID().uuidString)
 
-        guard let channel = self.channel else {
+        guard let channel = channel else {
             let error = ResponseError(code: .invalidRequest, message: "client not started")
-            let result: EventLoopFuture<JSONRPCResult<Request.Response>> = self.group.next().makeSucceededFuture(.failure(error))
+            let result: EventLoopFuture<JSONRPCResult<Request.Response>> = group.next().makeSucceededFuture(.failure(error))
             return Response<Request>(requestID: id, result: result, client: self)
         }
 
@@ -51,7 +50,7 @@ extension JSONRPC: RPCClient {
     }
 
     public func send<Notification>(_ notification: Notification) where Notification: NotificationType {
-        guard let channel = self.channel else {
+        guard let channel = channel else {
             return
         }
 
@@ -62,14 +61,14 @@ extension JSONRPC: RPCClient {
     }
 
     public func connect(to address: ConnectionAddress) -> EventLoopFuture<Void> {
-        assert(self.state == .initializing)
+        assert(state == .initializing)
 
         let handler = JSONRPCMessageHandler(self, type: .Client)
         let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: config.messageRegistry,
-                                                                 maxPayload: self.config.maxPayload,
+                                                                 maxPayload: config.maxPayload,
                                                                  callbackRegistry: handler)
         let timeout = TimeAmount.seconds(config.timeout)
-        let bootstrap = ClientBootstrap(group: self.group)
+        let bootstrap = ClientBootstrap(group: group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelInitializer { channel in
                 channel.pipeline.addHandlers([IdleStateHandler(readTimeout: timeout), HalfCloseOnTimeout()])
@@ -85,14 +84,19 @@ extension JSONRPC: RPCClient {
                     }
             }
 
-        self.state = .starting(address.description)
+        state = .starting(address.description)
         let future: EventLoopFuture<Channel>
         switch address {
-        case .ip(host: let host, port: let port):
+        case let .ip(host: host, port: port):
             future = bootstrap.connect(host: host, port: port)
-        case .unixDomainSocket(path: let path):
+        case let .unixDomainSocket(path: path):
             future = bootstrap.connect(unixDomainSocketPath: path)
         }
+
+        future.whenFailure { _ in
+            self.state = .stopped
+        }
+
         return future.flatMap { channel in
             self.channel = channel
             ///

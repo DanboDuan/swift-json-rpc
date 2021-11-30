@@ -32,10 +32,10 @@ final class JSONRPCLogger {
 
     internal subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
         get {
-            return self.logger[metadataKey: metadataKey]
+            logger[metadataKey: metadataKey]
         }
         set {
-            self.logger[metadataKey: metadataKey] = newValue
+            logger[metadataKey: metadataKey] = newValue
         }
     }
 
@@ -50,8 +50,8 @@ final class JSONRPCLogger {
         function: String,
         line: UInt
     ) {
-        guard self.enable else { return }
-        self.logger.log(
+        guard enable else { return }
+        logger.log(
             level: level,
             message(),
             metadata: nil,

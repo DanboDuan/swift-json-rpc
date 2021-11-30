@@ -43,7 +43,7 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     private let type: ConnectionType
 
     public init(_ handler: MessageHandler, type: ConnectionType) {
-        self.receiveHandler = handler
+        receiveHandler = handler
         self.type = type
     }
 
@@ -51,11 +51,12 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     /// client send request or notification
     /// server send notification
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        let wrapper = self.unwrapOutboundIn(data)
-        if case .request(let request, let id) = wrapper.message {
+        let wrapper = unwrapOutboundIn(data)
+        if case let .request(request, id) = wrapper.message {
             self.outstandingRequests[id] = OutstandingRequestType(
                 requestType: Swift.type(of: request),
-                responseType: request.responseType())
+                responseType: request.responseType()
+            )
             self.queue[id] = wrapper.promise
         }
 
@@ -68,17 +69,17 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let message = unwrapInboundIn(data)
         switch message {
-        case .notification(let notification):
-            notification._handle(self.receiveHandler, from: ObjectIdentifier(context.channel))
-        case .request(let request, id: let id):
-            let future = request._handle(self.receiveHandler, id: id, from: ObjectIdentifier(context.channel))
+        case let .notification(notification):
+            notification._handle(receiveHandler, from: ObjectIdentifier(context.channel))
+        case let .request(request, id: id):
+            let future = request._handle(receiveHandler, id: id, from: ObjectIdentifier(context.channel))
 
             future.whenSuccess { response in
                 let result: JSONRPCMessage
                 switch response {
-                case .success(let value):
+                case let .success(value):
                     result = JSONRPCMessage.response(value, id: id)
-                case .failure(let error):
+                case let .failure(error):
                     result = JSONRPCMessage.errorResponse(error, id: id)
                 }
                 context.eventLoop.execute {
@@ -97,14 +98,14 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
                     context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
                 }
             }
-        case .response(let response, id: let id):
-            if let promise = self.queue.removeValue(forKey: id) {
+        case let .response(response, id: id):
+            if let promise = queue.removeValue(forKey: id) {
                 promise.succeed(message)
             } else {
                 log("server receive response \(String(describing: id)) \(String(describing: response)) ", level: .error)
             }
-        case .errorResponse(let error, id: let id):
-            if let requestID = id, let promise = self.queue.removeValue(forKey: requestID) {
+        case let .errorResponse(error, id: id):
+            if let requestID = id, let promise = queue.removeValue(forKey: requestID) {
                 promise.succeed(message)
             } else {
                 log("server receive errorResponse \(String(describing: id)) \(String(describing: error))", level: .error)
@@ -120,51 +121,51 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
         case CodecError.badJSON:
             let responseError = ResponseError(code: .parseError, error: error)
             let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            context.writeAndFlush(wrapOutboundOut(response), promise: nil)
         case CodecError.requestTooLarge:
             let responseError = ResponseError(code: .invalidRequest, error: error)
             let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+            context.writeAndFlush(wrapOutboundOut(response), promise: nil)
         default:
             if let decodingError = error as? MessageDecodingError {
                 let responseError = ResponseError(decodingError)
                 let response: JSONRPCMessage = .errorResponse(responseError, id: decodingError.id)
-                context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+                context.writeAndFlush(wrapOutboundOut(response), promise: nil)
             } else {
                 let responseError = ResponseError(code: .internalError, error: error)
                 let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-                context.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+                context.writeAndFlush(wrapOutboundOut(response), promise: nil)
             }
         }
     }
 
     public func channelActive(context: ChannelHandlerContext) {
         if let remoteAddress = context.remoteAddress {
-            if self.type == .Server {
+            if type == .Server {
                 log("client \(remoteAddress) connected")
             } else {
                 log("connected server \(remoteAddress) ")
             }
             let channel = context.channel
-            self.channelConnections[ObjectIdentifier(channel)] = channel
+            channelConnections[ObjectIdentifier(channel)] = channel
         }
     }
 
     public func channelInactive(context: ChannelHandlerContext) {
         if let remoteAddress = context.remoteAddress {
             log("client \(remoteAddress) disconnect")
-            if self.type == .Server {
+            if type == .Server {
                 log("client \(remoteAddress) connected")
             } else {
                 log("disconnect server \(remoteAddress) ")
             }
-            self.channelConnections.removeValue(forKey: ObjectIdentifier(context.channel))
+            channelConnections.removeValue(forKey: ObjectIdentifier(context.channel))
         }
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         if (event as? IdleStateHandler.IdleStateEvent) == .read {
-            self.errorCaught(context: context, error: ConnectionError.timeout)
+            errorCaught(context: context, error: ConnectionError.timeout)
         } else {
             context.fireUserInboundEventTriggered(event)
         }
@@ -176,15 +177,15 @@ extension JSONRPCMessageHandler: ServerNotificationSender {
         let message = JSONRPCMessage.notification(notification)
         let wrapper = JSONRPCMessageWrapper(message: message, promise: nil)
         switch client {
-        case .some(id: let id):
-            guard let channel = self.channelConnections[id] else {
+        case let .some(id: id):
+            guard let channel = channelConnections[id] else {
                 return
             }
             channel.eventLoop.execute {
                 channel.writeAndFlush(NIOAny(wrapper), promise: nil)
             }
         case .all:
-            self.channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
+            channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
                 channel.eventLoop.execute {
                     channel.writeAndFlush(NIOAny(wrapper), promise: nil)
                 }
@@ -195,7 +196,7 @@ extension JSONRPCMessageHandler: ServerNotificationSender {
 
 extension JSONRPCMessageHandler: ResponseTypeCallback {
     public func responseType(for id: RequestID) -> ResponseType.Type? {
-        guard let outstanding = self.outstandingRequests[id] else {
+        guard let outstanding = outstandingRequests[id] else {
             return nil
         }
 

@@ -42,8 +42,8 @@ public final class Request<R: RequestType> {
     init(_ request: Params, id: RequestID, clientID: ObjectIdentifier, cancellation: CancellationToken, promise: EventLoopPromise<JSONRPCResult<Response>>) {
         self.id = id
         self.clientID = clientID
-        self.params = request
-        self.cancellationToken = cancellation
+        params = request
+        cancellationToken = cancellation
         self.promise = promise
         _ = cancellation.addCancellationHandler { [weak self] in
             if let cancelled = request._cancelledResponse() {
@@ -80,17 +80,17 @@ public final class Request<R: RequestType> {
     }
 
     /// Whether the result has been cancelled.
-    public var isCancelled: Bool { return cancellationToken.isCancelled }
+    public var isCancelled: Bool { cancellationToken.isCancelled }
 
     @discardableResult
     public func addCancellationHandler(_ handler: @escaping () -> Void) -> Disposable {
-        return cancellationToken.addCancellationHandler(handler)
+        cancellationToken.addCancellationHandler(handler)
     }
 }
 
 extension Request: CustomStringConvertible {
     public var description: String {
-        return """
+        """
         Request<\(R.method)>(
           id: \(id),
           clientID: \(clientID),

@@ -29,7 +29,7 @@ public final class Response<R: RequestType> {
 
     // TODO: use async api
     public func get() throws -> JSONRPCResult<Response> {
-        return try result.wait()
+        try result.wait()
     }
 
     public func cancel() {

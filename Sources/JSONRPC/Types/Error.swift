@@ -45,7 +45,7 @@ public struct ResponseError: Error, Codable, Hashable {
     public init(code: ErrorCode, message: String) {
         self.code = code
         self.message = message
-        self.data = nil
+        data = nil
     }
 
     public init(code: ErrorCode, error: Error) {
@@ -61,11 +61,11 @@ public extension ResponseError {
     static var serverNotInitialized = ResponseError(code: .serverNotInitialized, message: "received other request before \"initialize\"")
 
     static func methodNotFound(_ method: String) -> ResponseError {
-        return ResponseError(code: .methodNotFound, message: "method not found: \(method)")
+        ResponseError(code: .methodNotFound, message: "method not found: \(method)")
     }
 
     static func unknown(_ message: String) -> ResponseError {
-        return ResponseError(code: .unknownErrorCode, message: message)
+        ResponseError(code: .unknownErrorCode, message: message)
     }
 }
 
@@ -100,19 +100,19 @@ public struct MessageDecodingError: Error, Hashable, Codable {
 
 public extension MessageDecodingError {
     static func methodNotFound(_ method: String, id: RequestID? = nil, messageKind: MessageKind = .unknown) -> MessageDecodingError {
-        return MessageDecodingError(code: .methodNotFound, message: "method not found: \(method)", id: id, messageKind: messageKind)
+        MessageDecodingError(code: .methodNotFound, message: "method not found: \(method)", id: id, messageKind: messageKind)
     }
 
     static func invalidRequest(_ reason: String, id: RequestID? = nil, messageKind: MessageKind = .unknown) -> MessageDecodingError {
-        return MessageDecodingError(code: .invalidRequest, message: reason, id: id, messageKind: messageKind)
+        MessageDecodingError(code: .invalidRequest, message: reason, id: id, messageKind: messageKind)
     }
 
     static func invalidParams(_ reason: String, id: RequestID? = nil, messageKind: MessageKind = .unknown) -> MessageDecodingError {
-        return MessageDecodingError(code: .invalidParams, message: reason, id: id, messageKind: messageKind)
+        MessageDecodingError(code: .invalidParams, message: reason, id: id, messageKind: messageKind)
     }
 
     static func parseError(_ reason: String, id: RequestID? = nil, messageKind: MessageKind = .unknown) -> MessageDecodingError {
-        return MessageDecodingError(code: .parseError, message: reason, id: id, messageKind: messageKind)
+        MessageDecodingError(code: .parseError, message: reason, id: id, messageKind: messageKind)
     }
 }
 

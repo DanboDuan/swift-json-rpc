@@ -10,7 +10,8 @@ let package = Package(
     products: [
         .library(
             name: "JSONRPC",
-            targets: ["JSONRPC"]),
+            targets: ["JSONRPC"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.1"),
@@ -34,8 +35,14 @@ let package = Package(
                 .product(name: "NIOFoundationCompat", package: "swift-nio"),
                 .product(name: "NIOExtras", package: "swift-nio-extras"),
                 .product(name: "Logging", package: "swift-log"),
-            ]),
+            ]
+        ),
         .testTarget(
             name: "JSONRPCTests",
-            dependencies: ["JSONRPC"]),
-    ])
+            dependencies: [
+                "JSONRPC",
+                "Example",
+            ]
+        ),
+    ]
+)

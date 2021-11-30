@@ -78,6 +78,6 @@ final class Client: ParsableCommand {
         sendNotification(client: client)
         sendUnknownRequest(client: client)
         try? client.closeFuture.wait()
-        try? client.stop().wait()
+        try? client.stop()
     }
 }
