@@ -23,10 +23,10 @@ public enum ConnectionAddress {
 extension ConnectionAddress: CustomStringConvertible {
     public var description: String {
         switch self {
-        case let .ip(host, port):
-            return "\(host):\(port)"
-        case let .unixDomainSocket(path):
-            return path
+            case let .ip(host, port):
+                return "\(host):\(port)"
+            case let .unixDomainSocket(path):
+                return path
         }
     }
 }

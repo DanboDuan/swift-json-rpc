@@ -14,13 +14,11 @@
 
 import Logging
 
-func log(
-    _ message: @autoclosure () -> Logger.Message,
-    level: LogLevel = .default,
-    file: String = #file,
-    function: String = #function,
-    line: UInt = #line
-) {
+func log(_ message: @autoclosure () -> Logger.Message,
+         level: LogLevel = .default,
+         file: String = #file,
+         function: String = #function,
+         line: UInt = #line) {
     JSONRPCLogger.shared.log(message(), level: level, file: file, function: function, line: line)
 }
 
@@ -43,13 +41,11 @@ final class JSONRPCLogger {
         self.logger = logger()
     }
 
-    public func log(
-        _ message: @autoclosure () -> Logger.Message,
-        level: Logger.Level,
-        file: String,
-        function: String,
-        line: UInt
-    ) {
+    public func log(_ message: @autoclosure () -> Logger.Message,
+                    level: Logger.Level,
+                    file: String,
+                    function: String,
+                    line: UInt) {
         guard enable else { return }
         logger.log(
             level: level,

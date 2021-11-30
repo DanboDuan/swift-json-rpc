@@ -32,10 +32,10 @@ extension RequestID: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case let .string(value):
-            try container.encode(value)
-        case let .number(value):
-            try container.encode(value)
+            case let .string(value):
+                try container.encode(value)
+            case let .number(value):
+                try container.encode(value)
         }
     }
 }
@@ -43,8 +43,8 @@ extension RequestID: Codable {
 extension RequestID: CustomStringConvertible {
     public var description: String {
         switch self {
-        case let .number(n): return String(n)
-        case let .string(s): return "\"\(s)\""
+            case let .number(n): return String(n)
+            case let .string(s): return "\"\(s)\""
         }
     }
 }

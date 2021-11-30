@@ -37,12 +37,12 @@ extension JSONRPC: RPCClient {
             promise.futureResult
         }.map { anyResult in
             switch anyResult {
-            case .response(let response, id: _):
-                return .success(response as! Request.Response)
-            case .errorResponse(let error, id: _):
-                return .failure(error)
-            default:
-                return .failure(ResponseError.unknown("unknown result"))
+                case .response(let response, id: _):
+                    return .success(response as! Request.Response)
+                case .errorResponse(let error, id: _):
+                    return .failure(error)
+                default:
+                    return .failure(ResponseError.unknown("unknown result"))
             }
         }
 
@@ -64,9 +64,11 @@ extension JSONRPC: RPCClient {
         assert(state == .initializing)
 
         let handler = JSONRPCMessageHandler(self, type: .Client)
-        let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: config.messageRegistry,
-                                                                 maxPayload: config.maxPayload,
-                                                                 callbackRegistry: handler)
+        let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(
+            messageRegistry: config.messageRegistry,
+            maxPayload: config.maxPayload,
+            callbackRegistry: handler
+        )
         let timeout = TimeAmount.seconds(config.timeout)
         let bootstrap = ClientBootstrap(group: group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
@@ -74,8 +76,10 @@ extension JSONRPC: RPCClient {
                 channel.pipeline.addHandlers([IdleStateHandler(readTimeout: timeout), HalfCloseOnTimeout()])
                     .flatMap {
                         let framingHandler = ContentLengthHeaderCodec()
-                        return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
-                                                             MessageToByteHandler(framingHandler)])
+                        return channel.pipeline.addHandlers([
+                            ByteToMessageHandler(framingHandler),
+                            MessageToByteHandler(framingHandler),
+                        ])
                     }.flatMap {
                         channel.pipeline.addHandlers([
                             codec,
@@ -87,10 +91,10 @@ extension JSONRPC: RPCClient {
         state = .starting(address.description)
         let future: EventLoopFuture<Channel>
         switch address {
-        case let .ip(host: host, port: port):
-            future = bootstrap.connect(host: host, port: port)
-        case let .unixDomainSocket(path: path):
-            future = bootstrap.connect(unixDomainSocketPath: path)
+            case let .ip(host: host, port: port):
+                future = bootstrap.connect(host: host, port: port)
+            case let .unixDomainSocket(path: path):
+                future = bootstrap.connect(unixDomainSocketPath: path)
         }
 
         future.whenFailure { _ in

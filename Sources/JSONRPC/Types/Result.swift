@@ -42,30 +42,30 @@ extension Swift.Result: Codable
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case let .success(value):
-            try value.encode(to: container.superEncoder(forKey: .success))
-        case let .failure(value):
-            try value.encode(to: container.superEncoder(forKey: .failure))
+            case let .success(value):
+                try value.encode(to: container.superEncoder(forKey: .success))
+            case let .failure(value):
+                try value.encode(to: container.superEncoder(forKey: .failure))
         }
     }
 
     /// Project out the .success value, or nil.
     public var success: Success? {
         switch self {
-        case let .success(value):
-            return value
-        default:
-            return nil
+            case let .success(value):
+                return value
+            default:
+                return nil
         }
     }
 
     /// Project out the .failure value, or nil.
     public var failure: Failure? {
         switch self {
-        case let .failure(error):
-            return error
-        default:
-            return nil
+            case let .failure(error):
+                return error
+            default:
+                return nil
         }
     }
 }

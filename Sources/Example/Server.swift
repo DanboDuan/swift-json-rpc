@@ -58,8 +58,10 @@ final class Server: ParsableCommand {
         } else {
             address = .ip(host: "127.0.0.1", port: options.port)
         }
-        let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
-                                              notifications: [HiNotification.self])
+        let messageRegistry = MessageRegistry(
+            requests: [HelloRequest.self, UnknownRequest.self],
+            notifications: [HiNotification.self]
+        )
         let config = Config(messageRegistry: messageRegistry)
         let server = JSONRPC.createServer(config: config)
 

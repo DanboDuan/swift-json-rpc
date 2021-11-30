@@ -21,11 +21,9 @@ public protocol _RequestType: MessageType {
     /// The name of the request.
     static var method: String { get }
 
-    func _handle(
-        _ handler: MessageHandler,
-        id: RequestID,
-        from: ObjectIdentifier
-    ) -> EventLoopFuture<JSONRPCResult<ResponseType>>
+    func _handle(_ handler: MessageHandler,
+                 id: RequestID,
+                 from: ObjectIdentifier) -> EventLoopFuture<JSONRPCResult<ResponseType>>
 
     func responseType() -> ResponseType.Type
 }
@@ -45,11 +43,9 @@ public protocol NotificationType: MessageType {
 }
 
 public extension RequestType {
-    func _handle(
-        _ handler: MessageHandler,
-        id: RequestID,
-        from: ObjectIdentifier
-    ) -> EventLoopFuture<JSONRPCResult<ResponseType>> {
+    func _handle(_ handler: MessageHandler,
+                 id: RequestID,
+                 from: ObjectIdentifier) -> EventLoopFuture<JSONRPCResult<ResponseType>> {
         let result = handler.handle(self, id: id, from: from)
         return result.map { response in
             response.map { $0 as ResponseType }

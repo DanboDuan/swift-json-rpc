@@ -23,8 +23,10 @@ final class JSONRPCTests: XCTestCase {
     func testBadHost() throws {
         let port = Util.getFreePort()
         let address: ConnectionAddress = .ip(host: "127.0.0.1", port: Int(port))
-        let messageRegistry = MessageRegistry(requests: [HelloRequest.self, UnknownRequest.self],
-                                              notifications: [HiNotification.self])
+        let messageRegistry = MessageRegistry(
+            requests: [HelloRequest.self, UnknownRequest.self],
+            notifications: [HiNotification.self]
+        )
         let config = Config(messageRegistry: messageRegistry)
         let server = JSONRPC.createServer(config: config)
         XCTAssertNoThrow(try server.bind(to: address).wait())
@@ -36,8 +38,10 @@ final class JSONRPCTests: XCTestCase {
     func testHello() throws {
         let port = Util.getFreePort()
         let address: ConnectionAddress = .ip(host: "127.0.0.1", port: Int(port))
-        let messageRegistry = MessageRegistry(requests: [HelloRequest.self],
-                                              notifications: [HiNotification.self])
+        let messageRegistry = MessageRegistry(
+            requests: [HelloRequest.self],
+            notifications: [HiNotification.self]
+        )
 
         let config = Config(messageRegistry: messageRegistry)
         let server = JSONRPC.createServer(config: config)

@@ -31,8 +31,10 @@ extension JSONRPC: RPCServer {
     public func bind(to address: ConnectionAddress) -> EventLoopFuture<Void> {
         assert(state == .initializing)
         let handler = JSONRPCMessageHandler(self, type: .Server)
-        let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(messageRegistry: config.messageRegistry,
-                                                                 maxPayload: config.maxPayload)
+        let codec = CodableCodec<JSONRPCMessage, JSONRPCMessage>(
+            messageRegistry: config.messageRegistry,
+            maxPayload: config.maxPayload
+        )
         let timeout = TimeAmount.seconds(config.timeout)
         self.handler = handler
         let bootstrap = ServerBootstrap(group: group)
@@ -42,11 +44,15 @@ extension JSONRPC: RPCServer {
                 channel.pipeline.addHandlers([IdleStateHandler(readTimeout: timeout), HalfCloseOnTimeout()])
                     .flatMap {
                         let framingHandler = ContentLengthHeaderCodec()
-                        return channel.pipeline.addHandlers([ByteToMessageHandler(framingHandler),
-                                                             MessageToByteHandler(framingHandler)])
+                        return channel.pipeline.addHandlers([
+                            ByteToMessageHandler(framingHandler),
+                            MessageToByteHandler(framingHandler),
+                        ])
                     }.flatMap {
-                        channel.pipeline.addHandlers([codec,
-                                                      handler])
+                        channel.pipeline.addHandlers([
+                            codec,
+                            handler,
+                        ])
                     }
             }
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
@@ -55,10 +61,10 @@ extension JSONRPC: RPCServer {
         state = .starting(address.description)
         let future: EventLoopFuture<Channel>
         switch address {
-        case let .ip(host: host, port: port):
-            future = bootstrap.bind(host: host, port: port)
-        case let .unixDomainSocket(path: path):
-            future = bootstrap.bind(unixDomainSocketPath: path, cleanupExistingSocketFile: true)
+            case let .ip(host: host, port: port):
+                future = bootstrap.bind(host: host, port: port)
+            case let .unixDomainSocket(path: path):
+                future = bootstrap.bind(unixDomainSocketPath: path, cleanupExistingSocketFile: true)
         }
         future.whenFailure { _ in
             self.state = .stopped

@@ -69,47 +69,47 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let message = unwrapInboundIn(data)
         switch message {
-        case let .notification(notification):
-            notification._handle(receiveHandler, from: ObjectIdentifier(context.channel))
-        case let .request(request, id: id):
-            let future = request._handle(receiveHandler, id: id, from: ObjectIdentifier(context.channel))
+            case let .notification(notification):
+                notification._handle(receiveHandler, from: ObjectIdentifier(context.channel))
+            case let .request(request, id: id):
+                let future = request._handle(receiveHandler, id: id, from: ObjectIdentifier(context.channel))
 
-            future.whenSuccess { response in
-                let result: JSONRPCMessage
-                switch response {
-                case let .success(value):
-                    result = JSONRPCMessage.response(value, id: id)
-                case let .failure(error):
-                    result = JSONRPCMessage.errorResponse(error, id: id)
+                future.whenSuccess { response in
+                    let result: JSONRPCMessage
+                    switch response {
+                        case let .success(value):
+                            result = JSONRPCMessage.response(value, id: id)
+                        case let .failure(error):
+                            result = JSONRPCMessage.errorResponse(error, id: id)
+                    }
+                    context.eventLoop.execute {
+                        context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
+                    }
                 }
-                context.eventLoop.execute {
-                    context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
+                future.whenFailure { error in
+                    let result: JSONRPCMessage
+                    if let response = error as? ResponseError {
+                        result = JSONRPCMessage.errorResponse(response, id: id)
+                    } else {
+                        let response = ResponseError(code: .unknownErrorCode, error: error)
+                        result = JSONRPCMessage.errorResponse(response, id: id)
+                    }
+                    context.eventLoop.execute {
+                        context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
+                    }
                 }
-            }
-            future.whenFailure { error in
-                let result: JSONRPCMessage
-                if let response = error as? ResponseError {
-                    result = JSONRPCMessage.errorResponse(response, id: id)
+            case let .response(response, id: id):
+                if let promise = queue.removeValue(forKey: id) {
+                    promise.succeed(message)
                 } else {
-                    let response = ResponseError(code: .unknownErrorCode, error: error)
-                    result = JSONRPCMessage.errorResponse(response, id: id)
+                    log("server receive response \(String(describing: id)) \(String(describing: response)) ", level: .error)
                 }
-                context.eventLoop.execute {
-                    context.writeAndFlush(self.wrapOutboundOut(result), promise: nil)
+            case let .errorResponse(error, id: id):
+                if let requestID = id, let promise = queue.removeValue(forKey: requestID) {
+                    promise.succeed(message)
+                } else {
+                    log("server receive errorResponse \(String(describing: id)) \(String(describing: error))", level: .error)
                 }
-            }
-        case let .response(response, id: id):
-            if let promise = queue.removeValue(forKey: id) {
-                promise.succeed(message)
-            } else {
-                log("server receive response \(String(describing: id)) \(String(describing: response)) ", level: .error)
-            }
-        case let .errorResponse(error, id: id):
-            if let requestID = id, let promise = queue.removeValue(forKey: requestID) {
-                promise.succeed(message)
-            } else {
-                log("server receive errorResponse \(String(describing: id)) \(String(describing: error))", level: .error)
-            }
         }
     }
 
@@ -118,24 +118,24 @@ final class JSONRPCMessageHandler: ChannelInboundHandler, ChannelOutboundHandler
             log("errorCaught client \(remoteAddress) \(String(describing: error))", level: .error)
         }
         switch error {
-        case CodecError.badJSON:
-            let responseError = ResponseError(code: .parseError, error: error)
-            let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.writeAndFlush(wrapOutboundOut(response), promise: nil)
-        case CodecError.requestTooLarge:
-            let responseError = ResponseError(code: .invalidRequest, error: error)
-            let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
-            context.writeAndFlush(wrapOutboundOut(response), promise: nil)
-        default:
-            if let decodingError = error as? MessageDecodingError {
-                let responseError = ResponseError(decodingError)
-                let response: JSONRPCMessage = .errorResponse(responseError, id: decodingError.id)
-                context.writeAndFlush(wrapOutboundOut(response), promise: nil)
-            } else {
-                let responseError = ResponseError(code: .internalError, error: error)
+            case CodecError.badJSON:
+                let responseError = ResponseError(code: .parseError, error: error)
                 let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
                 context.writeAndFlush(wrapOutboundOut(response), promise: nil)
-            }
+            case CodecError.requestTooLarge:
+                let responseError = ResponseError(code: .invalidRequest, error: error)
+                let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
+                context.writeAndFlush(wrapOutboundOut(response), promise: nil)
+            default:
+                if let decodingError = error as? MessageDecodingError {
+                    let responseError = ResponseError(decodingError)
+                    let response: JSONRPCMessage = .errorResponse(responseError, id: decodingError.id)
+                    context.writeAndFlush(wrapOutboundOut(response), promise: nil)
+                } else {
+                    let responseError = ResponseError(code: .internalError, error: error)
+                    let response: JSONRPCMessage = .errorResponse(responseError, id: .string("unknown"))
+                    context.writeAndFlush(wrapOutboundOut(response), promise: nil)
+                }
         }
     }
 
@@ -177,19 +177,19 @@ extension JSONRPCMessageHandler: ServerNotificationSender {
         let message = JSONRPCMessage.notification(notification)
         let wrapper = JSONRPCMessageWrapper(message: message, promise: nil)
         switch client {
-        case let .some(id: id):
-            guard let channel = channelConnections[id] else {
-                return
-            }
-            channel.eventLoop.execute {
-                channel.writeAndFlush(NIOAny(wrapper), promise: nil)
-            }
-        case .all:
-            channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
+            case let .some(id: id):
+                guard let channel = channelConnections[id] else {
+                    return
+                }
                 channel.eventLoop.execute {
                     channel.writeAndFlush(NIOAny(wrapper), promise: nil)
                 }
-            }
+            case .all:
+                channelConnections.forEach { (_: ObjectIdentifier, channel: Channel) in
+                    channel.eventLoop.execute {
+                        channel.writeAndFlush(NIOAny(wrapper), promise: nil)
+                    }
+                }
         }
     }
 }

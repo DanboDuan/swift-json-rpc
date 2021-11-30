@@ -61,49 +61,49 @@ extension JSONRPCMessage: Codable {
             let hasResult = container.contains(.result)
 
             switch (id, method, hasResult, error) {
-            case (nil, let method?, _, nil):
-                msgKind = .notification
+                case (nil, let method?, _, nil):
+                    msgKind = .notification
 
-                guard let messageType = messageRegistry.notificationType(for: method) else {
-                    throw MessageDecodingError.methodNotFound(method)
-                }
+                    guard let messageType = messageRegistry.notificationType(for: method) else {
+                        throw MessageDecodingError.methodNotFound(method)
+                    }
 
-                let params = try messageType.init(from: container.superDecoder(forKey: .params))
+                    let params = try messageType.init(from: container.superDecoder(forKey: .params))
 
-                self = .notification(params)
+                    self = .notification(params)
 
-            case (let id?, let method?, _, nil):
-                msgKind = .request
+                case (let id?, let method?, _, nil):
+                    msgKind = .request
 
-                guard let messageType = messageRegistry.requestType(for: method) else {
-                    throw MessageDecodingError.methodNotFound(method)
-                }
+                    guard let messageType = messageRegistry.requestType(for: method) else {
+                        throw MessageDecodingError.methodNotFound(method)
+                    }
 
-                let params = try messageType.init(from: container.superDecoder(forKey: .params))
+                    let params = try messageType.init(from: container.superDecoder(forKey: .params))
 
-                self = .request(params, id: id)
+                    self = .request(params, id: id)
 
-            case (let id?, nil, true, nil):
-                msgKind = .response
+                case (let id?, nil, true, nil):
+                    msgKind = .response
 
-                guard let responseTypeCallback = decoder.userInfo[.responseTypeCallbackKey] as? ResponseTypeCallback else {
-                    fatalError("missing or invalid responseTypeCallbackKey on decoder")
-                }
+                    guard let responseTypeCallback = decoder.userInfo[.responseTypeCallbackKey] as? ResponseTypeCallback else {
+                        fatalError("missing or invalid responseTypeCallbackKey on decoder")
+                    }
 
-                guard let responseType = responseTypeCallback.responseType(for: id) else {
-                    throw MessageDecodingError.invalidParams("response to unknown request \(id)")
-                }
+                    guard let responseType = responseTypeCallback.responseType(for: id) else {
+                        throw MessageDecodingError.invalidParams("response to unknown request \(id)")
+                    }
 
-                let result = try responseType.init(from: container.superDecoder(forKey: .result))
+                    let result = try responseType.init(from: container.superDecoder(forKey: .result))
 
-                self = .response(result, id: id)
+                    self = .response(result, id: id)
 
-            case (let id, nil, _, let error?):
-                msgKind = .response
-                self = .errorResponse(error, id: id)
+                case (let id, nil, _, let error?):
+                    msgKind = .response
+                    self = .errorResponse(error, id: id)
 
-            default:
-                throw MessageDecodingError.invalidRequest("message not recognized as request, response or notification")
+                default:
+                    throw MessageDecodingError.invalidRequest("message not recognized as request, response or notification")
             }
 
         } catch var error as MessageDecodingError {
@@ -132,22 +132,22 @@ extension JSONRPCMessage: Codable {
         try container.encode(jsonrpcVersion, forKey: .jsonrpc)
 
         switch self {
-        case let .notification(params):
-            try container.encode(type(of: params).method, forKey: .method)
-            try params.encode(to: container.superEncoder(forKey: .params))
+            case let .notification(params):
+                try container.encode(type(of: params).method, forKey: .method)
+                try params.encode(to: container.superEncoder(forKey: .params))
 
-        case let .request(params, id):
-            try container.encode(type(of: params).method, forKey: .method)
-            try container.encode(id, forKey: .id)
-            try params.encode(to: container.superEncoder(forKey: .params))
+            case let .request(params, id):
+                try container.encode(type(of: params).method, forKey: .method)
+                try container.encode(id, forKey: .id)
+                try params.encode(to: container.superEncoder(forKey: .params))
 
-        case let .response(result, id):
-            try container.encode(id, forKey: .id)
-            try result.encode(to: container.superEncoder(forKey: .result))
+            case let .response(result, id):
+                try container.encode(id, forKey: .id)
+                try result.encode(to: container.superEncoder(forKey: .result))
 
-        case let .errorResponse(error, id):
-            try container.encode(id, forKey: .id)
-            try container.encode(error, forKey: .error)
+            case let .errorResponse(error, id):
+                try container.encode(id, forKey: .id)
+                try container.encode(error, forKey: .error)
         }
     }
 }

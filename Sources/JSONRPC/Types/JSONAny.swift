@@ -50,20 +50,20 @@ extension JSONAny: Encodable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case .null:
-            try container.encodeNil()
-        case let .int(value):
-            try container.encode(value)
-        case let .bool(value):
-            try container.encode(value)
-        case let .double(value):
-            try container.encode(value)
-        case let .string(value):
-            try container.encode(value)
-        case let .array(value):
-            try container.encode(value)
-        case let .dictionary(value):
-            try container.encode(value)
+            case .null:
+                try container.encodeNil()
+            case let .int(value):
+                try container.encode(value)
+            case let .bool(value):
+                try container.encode(value)
+            case let .double(value):
+                try container.encode(value)
+            case let .string(value):
+                try container.encode(value)
+            case let .array(value):
+                try container.encode(value)
+            case let .dictionary(value):
+                try container.encode(value)
         }
     }
 }

@@ -101,68 +101,67 @@ final class ContentLengthHeaderCodec: MessageToByteEncoder, ByteToMessageDecoder
     // `decode` will be invoked whenever there is more data available (or if we return `.continue`).
     public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
         switch state {
-        case .waitingForHeaderNameOrHeaderBlockEnd:
-            // Given that we're waiting for the end of a header block or a new header field, it's sensible to
-            // check if this might be the end of the block.
-            if buffer.readableBytesView.starts(with: "\r\n".utf8) {
-                buffer.moveReaderIndex(forwardBy: 2) // skip \r\n\r\n
-                return try processHeaderBlockEnd(context: context)
-            }
-
-            // Given that this is not the end of a header block, it must be a new header field. A new header field
-            // must always have a colon (or we don't have enough data).
-            if let colonIndex = buffer.readableBytesView.firstIndex(of: UInt8(ascii: ":")) {
-                let headerName = buffer.readString(length: colonIndex - buffer.readableBytesView.startIndex)!
-                buffer.moveReaderIndex(forwardBy: 1) // skip the colon
-                state = .waitingForHeaderValue(name: headerName.trimmed().lowercased())
-                return .continue
-            }
-
-            return .needMoreData
-        case let .waitingForHeaderValue(name: headerName):
-            // Cool, we're waiting for a header value (ie. we're after the colon).
-            // Let's not bother unless we found the whole thing
-            guard let newlineIndex = buffer.readableBytesView.firstIndex(of: UInt8(ascii: "\n")) else {
-                return .needMoreData
-            }
-
-            // Is this a header we actually care about?
-            if headerName == "content-length" {
-                // Yes, let's parse the int.
-                let headerValue = buffer.readString(length: newlineIndex - buffer.readableBytesView.startIndex + 1)!
-                if let length = UInt32(headerValue.trimmed()) { // anything more than 4GB or negative doesn't make sense
-                    payloadLength = .init(length)
-                } else {
-                    throw DecodingError.illegalContentLengthHeaderValue(headerValue)
+            case .waitingForHeaderNameOrHeaderBlockEnd:
+                // Given that we're waiting for the end of a header block or a new header field, it's sensible to
+                // check if this might be the end of the block.
+                if buffer.readableBytesView.starts(with: "\r\n".utf8) {
+                    buffer.moveReaderIndex(forwardBy: 2) // skip \r\n\r\n
+                    return try processHeaderBlockEnd(context: context)
                 }
-            } else {
-                // Nope, let's just skip over it
-                buffer.moveReaderIndex(forwardBy: newlineIndex - buffer.readableBytesView.startIndex + 1)
-            }
 
-            // but in any case, we're now waiting for a new header or the end of the header block again.
-            state = .waitingForHeaderNameOrHeaderBlockEnd
-            return .continue
-        case let .waitingForPayload(length: length):
-            // That's the easiest case, let's just wait until we have enough data.
-            if let payload = buffer.readSlice(length: length) {
-                // Cool, we got enough data, let's go back waiting for a new header block.
-                state = .waitingForHeaderNameOrHeaderBlockEnd
-                // And send what we found through the pipeline.
-                context.fireChannelRead(wrapInboundOut(payload))
-                return .continue
-            } else {
+                // Given that this is not the end of a header block, it must be a new header field. A new header field
+                // must always have a colon (or we don't have enough data).
+                if let colonIndex = buffer.readableBytesView.firstIndex(of: UInt8(ascii: ":")) {
+                    let headerName = buffer.readString(length: colonIndex - buffer.readableBytesView.startIndex)!
+                    buffer.moveReaderIndex(forwardBy: 1) // skip the colon
+                    state = .waitingForHeaderValue(name: headerName.trimmed().lowercased())
+                    return .continue
+                }
+
                 return .needMoreData
-            }
+            case let .waitingForHeaderValue(name: headerName):
+                // Cool, we're waiting for a header value (ie. we're after the colon).
+                // Let's not bother unless we found the whole thing
+                guard let newlineIndex = buffer.readableBytesView.firstIndex(of: UInt8(ascii: "\n")) else {
+                    return .needMoreData
+                }
+
+                // Is this a header we actually care about?
+                if headerName == "content-length" {
+                    // Yes, let's parse the int.
+                    let headerValue = buffer.readString(length: newlineIndex - buffer.readableBytesView.startIndex + 1)!
+                    if let length = UInt32(headerValue.trimmed()) { // anything more than 4GB or negative doesn't make sense
+                        payloadLength = .init(length)
+                    } else {
+                        throw DecodingError.illegalContentLengthHeaderValue(headerValue)
+                    }
+                } else {
+                    // Nope, let's just skip over it
+                    buffer.moveReaderIndex(forwardBy: newlineIndex - buffer.readableBytesView.startIndex + 1)
+                }
+
+                // but in any case, we're now waiting for a new header or the end of the header block again.
+                state = .waitingForHeaderNameOrHeaderBlockEnd
+                return .continue
+            case let .waitingForPayload(length: length):
+                // That's the easiest case, let's just wait until we have enough data.
+                if let payload = buffer.readSlice(length: length) {
+                    // Cool, we got enough data, let's go back waiting for a new header block.
+                    state = .waitingForHeaderNameOrHeaderBlockEnd
+                    // And send what we found through the pipeline.
+                    context.fireChannelRead(wrapInboundOut(payload))
+                    return .continue
+                } else {
+                    return .needMoreData
+                }
         }
     }
 
     /// Invoked when the `Channel` is being brought down.
-    public func decodeLast(
-        context: ChannelHandlerContext,
-        buffer: inout ByteBuffer,
-        seenEOF _: Bool
-    ) throws -> DecodingState {
+    public func decodeLast(context: ChannelHandlerContext,
+                           buffer: inout ByteBuffer,
+                           seenEOF _: Bool) throws
+        -> DecodingState {
         // Last chance to decode anything.
         while try decode(context: context, buffer: &buffer) == .continue {}
 

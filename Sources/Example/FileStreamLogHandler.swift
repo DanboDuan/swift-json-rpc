@@ -43,10 +43,12 @@ final class NIOLoggerWriter {
         fileIO = NonBlockingFileIO(threadPool: threadPool)
         threadPool.start()
         eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        futureFileHandle = fileIO.openFile(path: path,
-                                           mode: .write,
-                                           flags: .allowFileCreation(),
-                                           eventLoop: eventLoopGroup.next())
+        futureFileHandle = fileIO.openFile(
+            path: path,
+            mode: .write,
+            flags: .allowFileCreation(),
+            eventLoop: eventLoopGroup.next()
+        )
     }
 
     public func log(log: String) {
@@ -59,9 +61,11 @@ final class NIOLoggerWriter {
         let fileIO = fileIO
         let eventLoopGroup = eventLoopGroup
         futureFileHandle.whenSuccess { handle in
-            self.writeFuture = fileIO.write(fileHandle: handle,
-                                            buffer: buffer,
-                                            eventLoop: eventLoopGroup.next())
+            self.writeFuture = fileIO.write(
+                fileHandle: handle,
+                buffer: buffer,
+                eventLoop: eventLoopGroup.next()
+            )
         }
     }
 
