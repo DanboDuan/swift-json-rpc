@@ -59,7 +59,7 @@
 --voidtype void
 --wraparguments before-first
 --wrapcollections before-first
---wrapconditions before-first
+--wrapconditions after-first
 --wrapparameters after-first
 --wrapreturntype if-multiline
 --xcodeindentation disabled

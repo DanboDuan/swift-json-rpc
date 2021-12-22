@@ -153,7 +153,7 @@ dependencies: [
     .package(url: "https://github.com/DanboDuan/swift-json-rpc.git", .upToNextMajor(from: "1.0.0"))
 ]
 ```
-## Recognition
+## Credits
 
 - [apple/swift-nio-examples](https://github.com/apple/swift-nio-examples) for Swift NIO JSON RPC Example
 - [apple/sourcekit-lsp](https://github.com/apple/sourcekit-lsp) for JSON RPC Codable Example
