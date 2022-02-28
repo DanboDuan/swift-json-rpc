@@ -28,11 +28,5 @@ public struct CommandOptions: ParsableArguments {
     )
     public var path: String?
 
-    @Flag(
-        name: [.customLong("version"), .customShort("v")],
-        help: "Display the version of tool"
-    )
-    public var showVersion = false
-
     public init() {}
 }

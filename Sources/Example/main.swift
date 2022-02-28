@@ -19,6 +19,7 @@ final class Main: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "JSONRPC",
         abstract: "JSON RPC Client & Server",
+        version: "1.0.0",
         subcommands: [
             Client.self,
             Server.self,
@@ -28,12 +29,7 @@ final class Main: ParsableCommand {
     @OptionGroup()
     var options: CommandOptions
 
-    func run() throws {
-        if options.showVersion {
-            print("1.0.0")
-            return
-        }
-    }
+    func run() throws {}
 }
 
 Main.main()
